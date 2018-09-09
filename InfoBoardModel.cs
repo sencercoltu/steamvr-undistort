@@ -86,21 +86,15 @@ namespace Undistort
             textBrush = new SolidColorBrush(textRenderTarget, SharpDX.Color4.Black);
         }
 
-        private bool IsActive(int eye)
-        {
-            return (RenderFlags.HasFlag(RenderFlag.Left) && eye != 1) ||
-                   (RenderFlags.HasFlag(RenderFlag.Right) && eye == 1);
-        }
-
         private SharpDX.Color4 activeColor = new SharpDX.Color4(0.666f, 1, 0.784f, 1);
         private SharpDX.Color4 inactiveColor = new SharpDX.Color4(1, 0.666f, 0.784f, 1);
 
         public void Render(SharpDX.Direct3D11.DeviceContext context, ref EyeData eye)
         {
             textRenderTarget.BeginDraw();
-            textRenderTarget.Clear(IsActive(eye.Eye) ? activeColor : inactiveColor);
+            textRenderTarget.Clear(IsEyeActive(eye.Eye) ? activeColor : inactiveColor);
             var topPos = 0f;
-            var str = eye.EyeName + " EYE INFO " + (IsActive(eye.Eye) ? " - ACTIVE" : "") + "\n";
+            var str = eye.EyeName + " EYE INFO" + (IsEyeActive(eye.Eye) ? (RenderHiddenMesh && Program.Undistort) ? " - ACTIVE - HMA" : " - ACTIVE" : "") + "\n";
             str += "CENTERS\n";
             textRenderTarget.DrawText(str, headerTextFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, windowEye.FrameSize.Width, windowEye.FrameSize.Height - topPos), textBrush);
             topPos += headerTextFormat.FontSize * 2;

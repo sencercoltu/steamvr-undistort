@@ -28,20 +28,6 @@ namespace Undistort
             public Matrix EyeToHead;
             public Matrix Projection;
             public Matrix WorldViewProj;
-            //public Matrix Intrinsics;
-            //public Matrix Extrinsics;
-
-            //public Matrix worldViewProj;
-            //public Matrix worldView;
-            //public Matrix world;
-            //public Matrix view;
-            //public double zoomLevel;
-            //public double reserved0;
-            //public void ResetZoom()
-            //{
-            //    reserved0 = 0;
-            //    zoomLevel = 1.0;
-            //}
         }
 
         private struct PixelShaderData
@@ -74,7 +60,7 @@ namespace Undistort
 
         public static bool Undistort;
         private static bool Wireframe;
-        private static bool RenderHiddenMesh;
+        public static bool RenderHiddenMesh;
 
         private static CVRSystem vrSystem;
         private static CVRCompositor vrCompositor;
@@ -94,6 +80,8 @@ namespace Undistort
 
         private static RasterizerState wireFrameRasterizerState;
         private static RasterizerState rasterizerState;
+        private static RasterizerState ncWireFrameRasterizerState;
+        private static RasterizerState ncRasterizerState;
 
         public static DepthStencilState depthStencilState;
 
@@ -135,7 +123,7 @@ namespace Undistort
             public Matrix Intrinsics;
             public Matrix Extrinsics;
             public InfoBoardModel Board;
-            public bool ShowBoard;
+            public bool ShowBoard;            
 
             public string EyeName
             {
@@ -271,7 +259,7 @@ namespace Undistort
                     form.KeyDown += (s, e) =>
                     {
                         RenderHiddenMesh = e.Control;
-                        
+
                         switch (e.KeyCode)
                         {
                             case Keys.NumPad5:
@@ -333,7 +321,7 @@ namespace Undistort
                                 if (e.Shift)
                                     CrossHairModel.MoveCenter(RenderFlags.HasFlag(RenderFlag.Left) ? adjustStep : 0, 0, RenderFlags.HasFlag(RenderFlag.Right) ? adjustStep : 0, 0);
                                 else
-                                { 
+                                {
                                     adjustStep /= 10;
                                     if (adjustStep < 0.00000001f) adjustStep = 0.00000001f;
                                 }
@@ -523,9 +511,13 @@ namespace Undistort
                     rasterizerStateDescription.IsAntialiasedLineEnabled = false;
                     rasterizerStateDescription.IsMultisampleEnabled = true;
                     rasterizerState = new RasterizerState(device, rasterizerStateDescription);
+                    rasterizerStateDescription.CullMode = CullMode.None;
+                    ncRasterizerState = new RasterizerState(device, rasterizerStateDescription);
+                    rasterizerStateDescription.CullMode = CullMode.Back;
                     rasterizerStateDescription.FillMode = FillMode.Wireframe;
                     wireFrameRasterizerState = new RasterizerState(device, rasterizerStateDescription);
-
+                    rasterizerStateDescription.CullMode = CullMode.None;
+                    ncWireFrameRasterizerState = new RasterizerState(device, rasterizerStateDescription);
 
                     var blendStateDescription = BlendStateDescription.Default();
                     blendStateDescription.RenderTarget[0].BlendOperation = BlendOperation.Add;
@@ -627,22 +619,9 @@ namespace Undistort
                                 case EVREventType.VREvent_ButtonPress:
                                     var role = vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex);
                                     var button = vrEvent.data.controller.button;
-                                    switch (role)
-                                    {
-                                        case ETrackedControllerRole.LeftHand:
-                                            if (vrEvent.data.controller.button == 2) //grip
-                                            {
-                                                leftEye.ShowBoard = !leftEye.ShowBoard;
-                                                windowEye.ShowBoard = leftEye.ShowBoard;
-                                            }
-                                            System.Diagnostics.Debug.WriteLine(button);
-                                            break;
-                                        case ETrackedControllerRole.RightHand:
-                                            if (vrEvent.data.controller.button == 2) //grip
-                                                rightEye.ShowBoard = !rightEye.ShowBoard;
-                                            System.Diagnostics.Debug.WriteLine(button);
-                                            break;
-                                    }
+                                    var state = default(VRControllerState_t);
+                                    vrSystem.GetControllerState(vrEvent.trackedDeviceIndex, ref state, (uint)Utilities.SizeOf<VRControllerState_t>());
+                                    ButtonPressed(role, ref state, (EVRButtonId)vrEvent.data.controller.button);
                                     break;
                                 default:
                                     //System.Diagnostics.Debug.WriteLine((EVREventType)vrEvent.eventType);
@@ -675,6 +654,64 @@ namespace Undistort
                 }
             }
 
+        }
+
+        private static void ButtonPressed(ETrackedControllerRole role, ref VRControllerState_t state, EVRButtonId button)
+        {
+            switch (button)
+            {
+                case EVRButtonId.k_EButton_Grip: //grip
+                    {
+                        switch (role)
+                        {
+                            case ETrackedControllerRole.LeftHand:
+                                leftEye.ShowBoard = !leftEye.ShowBoard;
+                                windowEye.ShowBoard = leftEye.ShowBoard;
+                                break;
+                            case ETrackedControllerRole.RightHand:
+                                leftEye.ShowBoard = !leftEye.ShowBoard;
+                                windowEye.ShowBoard = leftEye.ShowBoard;
+                                break;
+                        }
+                        break;
+                    }
+                case EVRButtonId.k_EButton_ApplicationMenu: //grip
+                    {
+                        break;
+                    }
+                case EVRButtonId.k_EButton_SteamVR_Touchpad:
+                    {
+                        if (state.rAxis0.x > -0.3 && state.rAxis0.x < 0.3 && state.rAxis0.y > -0.3 && state.rAxis0.y < 0.3)
+                        {
+                            //center pressed
+                        }
+                        else if (state.rAxis0.x < 0 && Math.Abs(state.rAxis0.y) < Math.Abs(state.rAxis0.x))
+                        {
+                            //left
+
+                        }
+                        else if (state.rAxis0.x > 0 && Math.Abs(state.rAxis0.y) < Math.Abs(state.rAxis0.x))
+                        {
+                            //right
+                        }
+                        else if (state.rAxis0.y > 0 && Math.Abs(state.rAxis0.x) < Math.Abs(state.rAxis0.y))
+                        {
+                            //up
+                        }
+                        else if (state.rAxis0.y < 0 && Math.Abs(state.rAxis0.x) < Math.Abs(state.rAxis0.y))
+                        {
+                            //down
+                        }
+                    }
+                    break;
+            }
+
+        }
+
+        public static bool IsEyeActive(int eye)
+        {
+            return (RenderFlags.HasFlag(RenderFlag.Left) && eye != 1) ||
+                   (RenderFlags.HasFlag(RenderFlag.Right) && eye == 1);
         }
 
         private static void RenderView(ref EyeData eye)
@@ -733,7 +770,7 @@ namespace Undistort
             Matrix controllerMat = default(Matrix);
             foreach (var controllerId in controllerIDs)
             {
-                if (controllers[controllerId] == ETrackedControllerRole.Invalid)                
+                if (controllers[controllerId] == ETrackedControllerRole.Invalid)
                     controllers[controllerId] = vrSystem.GetControllerRoleForTrackedDeviceIndex(controllerId);
 
                 var controllerRole = controllers[controllerId];
@@ -753,8 +790,9 @@ namespace Undistort
                 }
             }
 
-            if (RenderHiddenMesh)
+            if (RenderHiddenMesh && IsEyeActive((int)eye.Eye))
             {
+                deviceContext.Rasterizer.State = Wireframe ? ncWireFrameRasterizerState : ncRasterizerState;
                 //render hidden mesh area just for control distortion
                 vertexShaderData.Head = headMatrix; vertexShaderData.Head.Transpose();
                 vertexShaderData.EyeToHead = eye.EyeToHeadView; vertexShaderData.EyeToHead.Invert(); vertexShaderData.EyeToHead.Transpose();
@@ -769,6 +807,10 @@ namespace Undistort
                 deviceContext.InputAssembler.SetVertexBuffers(0, hmaVertexBufferBinding);
                 deviceContext.Draw((int)(3 * eye.HiddenAreaMesh.unTriangleCount), 0);
             }
+
+            if (Wireframe) //revert            
+                deviceContext.Rasterizer.State = rasterizerState;
+
 
             var texView = eye.TextureView;
 
