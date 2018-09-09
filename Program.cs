@@ -168,7 +168,7 @@ namespace Undistort
             ALL = Red | Green | Blue | Left | Right | K1 | K2 | K3
         }
 
-        public static double zoomLevel = 0.6000000238418579; //1.0;
+        public static float zoomLevel = 1.0f;
 
         public static RenderFlag RenderFlags = RenderFlag.ALL;
 
@@ -220,8 +220,8 @@ namespace Undistort
             leftEye.FrameSize = rightEye.FrameSize = new Size((int)width, (int)height);
             windowEye.FrameSize = new Size(1080 / 2, 1200 / 2);
 
-            windowEye.Projection = leftEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Left, 0.01f, 1000.0f));
-            rightEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Right, 0.01f, 1000.0f));
+            windowEye.Projection = leftEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Left, 0.01f, 1000.0f));                
+            rightEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Right, 0.01f, 1000.0f));                
 
             windowEye.EyeToHeadView = leftEye.EyeToHeadView = Convert(vrSystem.GetEyeToHeadTransform(EVREye.Eye_Left));
             rightEye.EyeToHeadView = Convert(vrSystem.GetEyeToHeadTransform(EVREye.Eye_Right));
@@ -265,6 +265,23 @@ namespace Undistort
                             case Keys.NumPad5:
                                 Undistort = !Undistort;
                                 pixelShaderData.undistort = Undistort ? 1 : 0;
+                                if (Undistort)
+                                {
+                                    //get raw matrix and modify scale value according to instrints/extrincts??
+                                    leftEye.Projection = GetRawMatrix(EVREye.Eye_Left, 0.01f, 1000.0f);
+                                    rightEye.Projection = GetRawMatrix(EVREye.Eye_Right, 0.01f, 1000.0f);
+                                    leftEye.Projection.M11 *= zoomLevel;
+                                    leftEye.Projection.M22 *= zoomLevel;
+                                    rightEye.Projection.M11 *= zoomLevel;
+                                    rightEye.Projection.M22 *= zoomLevel;
+                                    windowEye.Projection = leftEye.Projection;
+                                }
+                                else
+                                {
+                                    //reset proj
+                                    windowEye.Projection = leftEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Left, 0.01f, 1000.0f));
+                                    rightEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Right, 0.01f, 1000.0f));
+                                }
                                 break;
                             case Keys.PageUp:
                                 Wireframe = !Wireframe;
@@ -298,10 +315,21 @@ namespace Undistort
                                 RenderFlags ^= RenderFlag.Right;
                                 break;
                             case Keys.Subtract:
-                                zoomLevel *= 0.999;
+                                zoomLevel -= 0.0001f;
+                                leftEye.Projection.M11 *= zoomLevel;
+                                leftEye.Projection.M22 *= zoomLevel;
+                                rightEye.Projection.M11 *= zoomLevel;
+                                rightEye.Projection.M22 *= zoomLevel;
+                                windowEye.Projection = leftEye.Projection;
                                 break;
                             case Keys.Add:
-                                zoomLevel *= 1.001;
+                                zoomLevel += 0.0001f;
+                                leftEye.Projection.M11 *= zoomLevel;
+                                leftEye.Projection.M22 *= zoomLevel;
+                                rightEye.Projection.M11 *= zoomLevel;
+                                rightEye.Projection.M22 *= zoomLevel;
+                                windowEye.Projection = leftEye.Projection;
+                                
                                 break;
                             case Keys.Home:
                                 if (RenderFlags.HasFlag(RenderFlag.Left)) leftEye.Coefficients.Init();
@@ -656,6 +684,30 @@ namespace Undistort
 
         }
 
+        private static Matrix GetRawMatrix(EVREye eye, float zNear, float zFar)
+        {
+            float fLeft = 0f;
+            float fRight = 0f;
+            float fTop = 0f;
+            float fBottom = 0f;
+            vrSystem.GetProjectionRaw(eye, ref fLeft, ref fRight, ref fTop, ref fBottom);            
+            var proj = new Matrix(0);
+
+            float idx = 1.0f / (fRight - fLeft);
+            float idy = 1.0f / (fBottom - fTop);
+            float idz = 1.0f / (zFar - zNear);
+            float sx = fRight + fLeft;
+            float sy = fBottom + fTop;
+
+            proj.M11 = 2 * idx; proj.M13 = sx * idx;
+            proj.M22 = 2 * idy; proj.M23 = sy * idy;
+            proj.M33 = -zFar * idz; proj.M34 = -zFar * zNear * idz;            
+            proj.M43 = -1.0f;
+
+            proj.Transpose();
+            return proj;
+        }
+
         private static void ButtonPressed(ETrackedControllerRole role, ref VRControllerState_t state, EVRButtonId button)
         {
             switch (button)
@@ -669,8 +721,7 @@ namespace Undistort
                                 windowEye.ShowBoard = leftEye.ShowBoard;
                                 break;
                             case ETrackedControllerRole.RightHand:
-                                leftEye.ShowBoard = !leftEye.ShowBoard;
-                                windowEye.ShowBoard = leftEye.ShowBoard;
+                                rightEye.ShowBoard = !rightEye.ShowBoard;                                
                                 break;
                         }
                         break;
