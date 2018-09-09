@@ -20,3 +20,4 @@ Parts of code were inspired or taken from:
 https://interplayoflight.wordpress.com/2013/03/03/sharpdx-and-3d-model-loading/
 https://www.limilabs.com/blog/json-net-formatter
 https://github.com/SpyderTL/TestOpenVR
+https://github.com/wescotte/distortionizer-SteamVR
