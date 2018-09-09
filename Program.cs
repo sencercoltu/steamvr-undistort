@@ -80,7 +80,8 @@ namespace Undistort
         private static CVRCompositor vrCompositor;
         private static uint maxTrackedDeviceCount;
         private static uint hmdID;
-        private static Dictionary<uint, ETrackedControllerRole> controllerIDs;
+        private static Dictionary<uint, ETrackedControllerRole> controllers;
+        private static uint[] controllerIDs = new uint[0];
         private static TrackedDevicePose_t[] currentPoses;
         private static TrackedDevicePose_t[] nextPoses;
 
@@ -181,7 +182,7 @@ namespace Undistort
 
         public static double zoomLevel = 0.6000000238418579; //1.0;
 
-        private static RenderFlag RenderFlags = RenderFlag.ALL;
+        public static RenderFlag RenderFlags = RenderFlag.ALL;
 
         private static void MarshalUnmananagedArray2Struct<T>(IntPtr unmanagedArray, int length, out T[] mangagedArray)
         {
@@ -194,6 +195,8 @@ namespace Undistort
                 mangagedArray[i] = Marshal.PtrToStructure<T>(ins);
             }
         }
+
+        public static float adjustStep = 0.001f;
 
         [STAThread]
         private static void Main()
@@ -219,7 +222,7 @@ namespace Undistort
             currentPoses = new TrackedDevicePose_t[maxTrackedDeviceCount];
             nextPoses = new TrackedDevicePose_t[maxTrackedDeviceCount];
 
-            controllerIDs = new Dictionary<uint, ETrackedControllerRole>();
+            controllers = new Dictionary<uint, ETrackedControllerRole>();
 
             uint width = 1080;
             uint height = 1200;
@@ -268,7 +271,7 @@ namespace Undistort
                     form.KeyDown += (s, e) =>
                     {
                         RenderHiddenMesh = e.Control;
-                        var amount = 0.001f;
+                        
                         switch (e.KeyCode)
                         {
                             case Keys.NumPad5:
@@ -319,66 +322,76 @@ namespace Undistort
                                 break;
                             case Keys.Left:
                                 if (e.Shift)
-                                    CrossHairModel.MoveCenter(RenderFlags.HasFlag(RenderFlag.Left) ? -amount : 0, 0, RenderFlags.HasFlag(RenderFlag.Right) ? -amount : 0, 0);
+                                    CrossHairModel.MoveCenter(RenderFlags.HasFlag(RenderFlag.Left) ? -adjustStep : 0, 0, RenderFlags.HasFlag(RenderFlag.Right) ? -adjustStep : 0, 0);
+                                else
+                                {
+                                    adjustStep *= 10;
+                                    if (adjustStep > 1) adjustStep = 1;
+                                }
                                 break;
                             case Keys.Right:
                                 if (e.Shift)
-                                    CrossHairModel.MoveCenter(RenderFlags.HasFlag(RenderFlag.Left) ? amount : 0, 0, RenderFlags.HasFlag(RenderFlag.Right) ? amount : 0, 0);
+                                    CrossHairModel.MoveCenter(RenderFlags.HasFlag(RenderFlag.Left) ? adjustStep : 0, 0, RenderFlags.HasFlag(RenderFlag.Right) ? adjustStep : 0, 0);
+                                else
+                                { 
+                                    adjustStep /= 10;
+                                    if (adjustStep < 0.00000001f) adjustStep = 0.00000001f;
+                                }
                                 break;
                             case Keys.Up:
                             case Keys.Down:
                                 if (e.Shift)
                                 {
                                     if (e.KeyCode == Keys.Down && e.Shift)
-                                        CrossHairModel.MoveCenter(0, RenderFlags.HasFlag(RenderFlag.Left) ? -amount : 0, 0, RenderFlags.HasFlag(RenderFlag.Right) ? -amount : 0);
+                                        CrossHairModel.MoveCenter(0, RenderFlags.HasFlag(RenderFlag.Left) ? -adjustStep : 0, 0, RenderFlags.HasFlag(RenderFlag.Right) ? -adjustStep : 0);
                                     if (e.KeyCode == Keys.Up && e.Shift)
-                                        CrossHairModel.MoveCenter(0, RenderFlags.HasFlag(RenderFlag.Left) ? amount : 0, 0, RenderFlags.HasFlag(RenderFlag.Right) ? amount : 0);
+                                        CrossHairModel.MoveCenter(0, RenderFlags.HasFlag(RenderFlag.Left) ? adjustStep : 0, 0, RenderFlags.HasFlag(RenderFlag.Right) ? adjustStep : 0);
                                     break;
                                 }
 
-                                if (e.KeyCode == Keys.Down) amount *= -1f;
+                                if (e.KeyCode == Keys.Down) adjustStep *= -1f;
                                 if (RenderFlags.HasFlag(RenderFlag.Left))
                                 {
                                     if (RenderFlags.HasFlag(RenderFlag.Red))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.red_k1 += amount;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.red_k2 += amount;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.red_k3 += amount;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.red_k1 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.red_k2 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.red_k3 += adjustStep;
                                     }
                                     if (RenderFlags.HasFlag(RenderFlag.Green))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.green_k1 += amount;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.green_k2 += amount;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.green_k3 += amount;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.green_k1 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.green_k2 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.green_k3 += adjustStep;
                                     }
 
                                     if (RenderFlags.HasFlag(RenderFlag.Blue))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.blue_k1 += amount;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.blue_k2 += amount;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.blue_k3 += amount;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.blue_k1 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.blue_k2 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.blue_k3 += adjustStep;
                                     }
                                 }
                                 if (RenderFlags.HasFlag(RenderFlag.Right))
                                 {
                                     if (RenderFlags.HasFlag(RenderFlag.Red))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.red_k1 += amount;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.red_k2 += amount;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.red_k3 += amount;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.red_k1 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.red_k2 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.red_k3 += adjustStep;
                                     }
                                     if (RenderFlags.HasFlag(RenderFlag.Green))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.green_k1 += amount;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.green_k2 += amount;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.green_k3 += amount;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.green_k1 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.green_k2 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.green_k3 += adjustStep;
                                     }
 
                                     if (RenderFlags.HasFlag(RenderFlag.Blue))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.blue_k1 += amount;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.blue_k2 += amount;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.blue_k3 += amount;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.blue_k1 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.blue_k2 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.blue_k3 += adjustStep;
                                     }
                                 }
                                 break;
@@ -491,8 +504,11 @@ namespace Undistort
                                 hmdID = cdevice;
                                 break;
                             case ETrackedDeviceClass.Controller:
-                                if (!controllerIDs.ContainsKey(cdevice))
-                                    controllerIDs.Add(cdevice, vrSystem.GetControllerRoleForTrackedDeviceIndex(cdevice));
+                                if (!controllers.ContainsKey(cdevice))
+                                {
+                                    controllers.Add(cdevice, vrSystem.GetControllerRoleForTrackedDeviceIndex(cdevice));
+                                    controllerIDs = controllers.Keys.ToArray();
+                                }
                                 break;
                         }
                     }
@@ -588,13 +604,21 @@ namespace Undistort
                         {
                             switch ((EVREventType)vrEvent.eventType)
                             {
+                                case EVREventType.VREvent_TrackedDeviceUpdated:
+                                    controllers.Remove(vrEvent.trackedDeviceIndex);
+                                    controllers.Add(vrEvent.trackedDeviceIndex, vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex));
+                                    break;
                                 case EVREventType.VREvent_TrackedDeviceActivated:
-                                    if (!controllerIDs.ContainsKey(vrEvent.trackedDeviceIndex))
-                                        controllerIDs.Add(vrEvent.trackedDeviceIndex, vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex));
+                                    if (!controllers.ContainsKey(vrEvent.trackedDeviceIndex))
+                                    {
+                                        controllers.Add(vrEvent.trackedDeviceIndex, vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex));
+                                        controllerIDs = controllers.Keys.ToArray();
+                                    }
                                     break;
 
                                 case EVREventType.VREvent_TrackedDeviceDeactivated:
-                                    controllerIDs.Remove(vrEvent.trackedDeviceIndex);
+                                    controllers.Remove(vrEvent.trackedDeviceIndex);
+                                    controllerIDs = controllers.Keys.ToArray();
                                     break;
                                 case EVREventType.VREvent_Quit:
                                     //case EVREventType.VREvent_ProcessQuit:
@@ -606,7 +630,7 @@ namespace Undistort
                                     switch (role)
                                     {
                                         case ETrackedControllerRole.LeftHand:
-                                            if (vrEvent.data.controller.button == 1)
+                                            if (vrEvent.data.controller.button == 2) //grip
                                             {
                                                 leftEye.ShowBoard = !leftEye.ShowBoard;
                                                 windowEye.ShowBoard = leftEye.ShowBoard;
@@ -614,7 +638,7 @@ namespace Undistort
                                             System.Diagnostics.Debug.WriteLine(button);
                                             break;
                                         case ETrackedControllerRole.RightHand:
-                                            if (vrEvent.data.controller.button == 1)
+                                            if (vrEvent.data.controller.button == 2) //grip
                                                 rightEye.ShowBoard = !rightEye.ShowBoard;
                                             System.Diagnostics.Debug.WriteLine(button);
                                             break;
@@ -707,22 +731,25 @@ namespace Undistort
             pixelShaderData.controller = 1;
 
             Matrix controllerMat = default(Matrix);
-            foreach (var controller in controllerIDs)
+            foreach (var controllerId in controllerIDs)
             {
-                if (currentPoses[controller.Key].bPoseIsValid)
+                if (controllers[controllerId] == ETrackedControllerRole.Invalid)                
+                    controllers[controllerId] = vrSystem.GetControllerRoleForTrackedDeviceIndex(controllerId);
+
+                var controllerRole = controllers[controllerId];
+
+                if (currentPoses[controllerId].bPoseIsValid)
                 {
-                    Convert(ref currentPoses[controller.Key].mDeviceToAbsoluteTracking, ref controllerMat);
+                    Convert(ref currentPoses[controllerId].mDeviceToAbsoluteTracking, ref controllerMat);
                     vertexShaderData.WorldViewProj = controllerMat * Matrix.Invert(eye.EyeToHeadView * headMatrix) * eye.Projection; vertexShaderData.WorldViewProj.Transpose();
                     deviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
                     deviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
                     environmentShader.Apply(deviceContext); //back 
                     controllerModel.Render(deviceContext);
-                    if (leftEye.ShowBoard && controller.Value == ETrackedControllerRole.LeftHand)
+                    if (leftEye.ShowBoard && controllerRole == ETrackedControllerRole.LeftHand)
                         leftEye.Board.Render(deviceContext, ref leftEye);
-                    if (rightEye.ShowBoard && controller.Value == ETrackedControllerRole.RightHand)
+                    if (rightEye.ShowBoard && controllerRole == ETrackedControllerRole.RightHand)
                         rightEye.Board.Render(deviceContext, ref rightEye);
-
-
                 }
             }
 

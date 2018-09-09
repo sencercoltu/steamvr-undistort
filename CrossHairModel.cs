@@ -22,7 +22,7 @@ namespace Undistort
         private static float[] verticesLeft;
         private static float[] verticesRight;
         private static Buffer vertexBuffer;
-        private static EyeCenters Centers;
+        public static EyeCenters Centers;
         private static VertexBufferBinding vertexBufferBinding;
         private static Shader shader;
 
@@ -76,6 +76,8 @@ namespace Undistort
             verticesRight[1] = verticesRight[4] = (float)Centers.RightY;
             verticesLeft[6] = verticesLeft[9] = (float)Centers.LeftX;
             verticesRight[6] = verticesRight[9] = (float)Centers.RightX;            
+
+            
         }
     }
 }
