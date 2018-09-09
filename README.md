@@ -1,5 +1,5 @@
-# steamvr-undistort
----
+## steamvr-undistort
+
 SteamVR lens distortion adjustment utility
 
 This is unfinished and experimental work.
@@ -19,7 +19,8 @@ Distortion correction is done inside the pixelshader. Chromatic aberration is go
 I had very limited knowledge about D3D11, matrices and transformations when starting this project. So code is unoptimized, and without comments.  
 
 
-###Parts of code or ideas taken from:
+### Parts of code or ideas taken from:
+
 https://interplayoflight.wordpress.com/2013/03/03/sharpdx-and-3d-model-loading/
 
 https://www.limilabs.com/blog/json-net-formatter
