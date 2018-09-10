@@ -24,9 +24,6 @@ namespace Undistort
     {
         private struct VertexShaderData
         {
-            public Matrix Head;
-            public Matrix EyeToHead;
-            public Matrix Projection;
             public Matrix WorldViewProj;
         }
 
@@ -47,7 +44,6 @@ namespace Undistort
                 red_k1 = red_k2 = red_k3 = green_k1 = green_k2 = green_k3 = blue_k1 = blue_k2 = blue_k3 = init;
                 center_red_x = center_red_y = center_green_x = center_green_y = center_blue_x = center_blue_y = 0;
             }
-
             public float red_k1, red_k2, red_k3;
             public float green_k1, green_k2, green_k3;
             public float blue_k1, blue_k2, blue_k3;
@@ -59,7 +55,7 @@ namespace Undistort
 
 
         public static bool Undistort;
-        private static bool Wireframe;
+        public static bool Wireframe;
         public static bool RenderHiddenMesh;
 
         private static CVRSystem vrSystem;
@@ -73,25 +69,26 @@ namespace Undistort
 
 
 
-        private static SharpDX.Direct3D11.Device device;
-        private static DeviceContext deviceContext;
-        public static SwapChain swapChain;
-        public static RawColor4 clearColor;
+        private static SharpDX.Direct3D11.Device d3dDevice;
+        private static DeviceContext d3dDeviceContext;
+        public static SwapChain d3dSwapChain;
+        public static RawColor4 d3dClearColor;
 
-        private static RasterizerState wireFrameRasterizerState;
-        private static RasterizerState rasterizerState;
+        private static RasterizerState WireFrameRasterizerState;
+        private static RasterizerState SolidRasteizerState;
         private static RasterizerState ncWireFrameRasterizerState;
         private static RasterizerState ncRasterizerState;
 
-        public static DepthStencilState depthStencilState;
+        public static DepthStencilState DepthStencilState;
 
         private static BlendState blendState;
         private static SamplerState samplerState;
 
         private static Matrix headMatrix;
 
-        public static Texture2D undistortTexture;
-        public static RenderTargetView undistortTextureView;
+        public static Texture2D UndistortTexture;
+        public static RenderTargetView UndistortTextureView;
+        public static ShaderResourceView UndistortShaderView;
 
         private static Shader hmaShader;
         private static VertexBufferBinding hmaVertexBufferBinding;
@@ -105,13 +102,28 @@ namespace Undistort
         private static SharpDX.Direct3D11.Buffer pixelConstantBuffer;
         private static SharpDX.Direct3D11.Buffer coefficientConstantBuffer;
 
-        public struct EyeData
+        public static Size WindowSize;
+        public static Texture2D BackBufferTexture;
+        public static RenderTargetView BackBufferTextureView;
+        public static Texture2D BackBufferDepthTexture;
+        public static DepthStencilView BackBufferDepthStencilView;
+
+        public static SharpDX.Direct3D11.Buffer BackBufferIndexBuffer;
+
+        public class EyeData
         {
-            public int Eye;
+            public EyeData(EVREye eye)
+            {
+                Eye = eye;
+                Coefficients.Init(1);                
+            }
+
+            public EVREye Eye;
             public Size FrameSize;
             public IDictionary<string, object> Json;
             public DistortShaderData Coefficients;
             public Matrix Projection;
+            public Matrix OriginalProjection;
             public Matrix EyeToHeadView;
             public HiddenAreaMesh_t HiddenAreaMesh;
             public SharpDX.Direct3D11.Buffer HiddenAreaMeshVertexBuffer;
@@ -123,35 +135,34 @@ namespace Undistort
             public Matrix Intrinsics;
             public Matrix Extrinsics;
             public InfoBoardModel Board;
-            public bool ShowBoard;            
-
+            public bool ShowBoard;
+            public SharpDX.Direct3D11.Buffer BackBufferVertexBuffer;
             public string EyeName
             {
                 get
                 {
                     switch (Eye)
                     {
-                        case -1:
-                            return "WINDOW";
-                        case 0:
+                        case EVREye.Eye_Left:
                             return "LEFT";
-                        case 1:
+                        case EVREye.Eye_Right:
                             return "RIGHT";
                         default:
-                            return "I THE";
+                            return "WTF";
                     }
                 }
             }
         }
 
 
-        public static EyeData leftEye = default(EyeData);
-        public static EyeData rightEye = default(EyeData);
-        public static EyeData windowEye = default(EyeData);
+        public static EyeData leftEye = new EyeData(EVREye.Eye_Left);
+        public static EyeData rightEye = new EyeData(EVREye.Eye_Right);
+
 
         private static Model environmentModel;
         private static Model controllerModel;
         public static Shader environmentShader;
+        public static Shader backbufferShader;
 
 
         [Flags]
@@ -218,15 +229,15 @@ namespace Undistort
             vrSystem.GetRecommendedRenderTargetSize(ref width, ref height);
 
             leftEye.FrameSize = rightEye.FrameSize = new Size((int)width, (int)height);
-            windowEye.FrameSize = new Size(1080 / 2, 1200 / 2);
+            WindowSize = new Size(1080, 1200 / 2);
 
-            windowEye.Projection = leftEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Left, 0.01f, 1000.0f));                
-            rightEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Right, 0.01f, 1000.0f));                
+            leftEye.Projection = leftEye.OriginalProjection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Left, 0.01f, 1000.0f));
+            rightEye.OriginalProjection = rightEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Right, 0.01f, 1000.0f));
 
-            windowEye.EyeToHeadView = leftEye.EyeToHeadView = Convert(vrSystem.GetEyeToHeadTransform(EVREye.Eye_Left));
+            leftEye.EyeToHeadView = Convert(vrSystem.GetEyeToHeadTransform(EVREye.Eye_Left));
             rightEye.EyeToHeadView = Convert(vrSystem.GetEyeToHeadTransform(EVREye.Eye_Right));
 
-            windowEye.HiddenAreaMesh = leftEye.HiddenAreaMesh = vrSystem.GetHiddenAreaMesh(EVREye.Eye_Left, EHiddenAreaMeshType.k_eHiddenAreaMesh_Standard);
+            leftEye.HiddenAreaMesh = vrSystem.GetHiddenAreaMesh(EVREye.Eye_Left, EHiddenAreaMeshType.k_eHiddenAreaMesh_Standard);
             rightEye.HiddenAreaMesh = vrSystem.GetHiddenAreaMesh(EVREye.Eye_Right, EHiddenAreaMeshType.k_eHiddenAreaMesh_Standard);
 
             int adapterIndex = 0;
@@ -238,7 +249,7 @@ namespace Undistort
                 using (var factory = new Factory4())
                 {
                     form.Text = "SteamVR Coefficient Utility";
-                    form.ClientSize = windowEye.FrameSize;
+                    form.ClientSize = WindowSize;
                     form.FormBorderStyle = FormBorderStyle.FixedSingle;
                     form.MinimizeBox = false;
                     form.MaximizeBox = false;
@@ -268,19 +279,15 @@ namespace Undistort
                                 if (Undistort)
                                 {
                                     //get raw matrix and modify scale value according to instrints/extrincts??
-                                    leftEye.Projection = GetRawMatrix(EVREye.Eye_Left, 0.01f, 1000.0f);
-                                    rightEye.Projection = GetRawMatrix(EVREye.Eye_Right, 0.01f, 1000.0f);
-                                    leftEye.Projection.M11 *= zoomLevel;
-                                    leftEye.Projection.M22 *= zoomLevel;
-                                    rightEye.Projection.M11 *= zoomLevel;
-                                    rightEye.Projection.M22 *= zoomLevel;
-                                    windowEye.Projection = leftEye.Projection;
+                                    //leftEye.Projection = GetRawMatrix(EVREye.Eye_Left, 0.01f, 1000.0f);
+                                    //rightEye.Projection = GetRawMatrix(EVREye.Eye_Right, 0.01f, 1000.0f)
+                                    SetProjectionZoomLevel();
                                 }
                                 else
                                 {
-                                    //reset proj
-                                    windowEye.Projection = leftEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Left, 0.01f, 1000.0f));
-                                    rightEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Right, 0.01f, 1000.0f));
+                                    //reset proj                                    
+                                    leftEye.Projection = leftEye.OriginalProjection;
+                                    rightEye.Projection = rightEye.OriginalProjection;
                                 }
                                 break;
                             case Keys.PageUp:
@@ -315,21 +322,12 @@ namespace Undistort
                                 RenderFlags ^= RenderFlag.Right;
                                 break;
                             case Keys.Subtract:
-                                zoomLevel -= 0.0001f;
-                                leftEye.Projection.M11 *= zoomLevel;
-                                leftEye.Projection.M22 *= zoomLevel;
-                                rightEye.Projection.M11 *= zoomLevel;
-                                rightEye.Projection.M22 *= zoomLevel;
-                                windowEye.Projection = leftEye.Projection;
+                                zoomLevel -= 0.01f;
+                                SetProjectionZoomLevel();
                                 break;
                             case Keys.Add:
-                                zoomLevel += 0.0001f;
-                                leftEye.Projection.M11 *= zoomLevel;
-                                leftEye.Projection.M22 *= zoomLevel;
-                                rightEye.Projection.M11 *= zoomLevel;
-                                rightEye.Projection.M22 *= zoomLevel;
-                                windowEye.Projection = leftEye.Projection;
-                                
+                                zoomLevel += 0.01f;
+                                SetProjectionZoomLevel();
                                 break;
                             case Keys.Home:
                                 if (RenderFlags.HasFlag(RenderFlag.Left)) leftEye.Coefficients.Init();
@@ -365,49 +363,50 @@ namespace Undistort
                                     break;
                                 }
 
-                                if (e.KeyCode == Keys.Down) adjustStep *= -1f;
+                                var step = adjustStep;
+                                if (e.KeyCode == Keys.Down) step *= -1f;
                                 if (RenderFlags.HasFlag(RenderFlag.Left))
                                 {
                                     if (RenderFlags.HasFlag(RenderFlag.Red))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.red_k1 += adjustStep;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.red_k2 += adjustStep;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.red_k3 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.red_k1 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.red_k2 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.red_k3 += step;
                                     }
                                     if (RenderFlags.HasFlag(RenderFlag.Green))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.green_k1 += adjustStep;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.green_k2 += adjustStep;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.green_k3 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.green_k1 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.green_k2 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.green_k3 += step;
                                     }
 
                                     if (RenderFlags.HasFlag(RenderFlag.Blue))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.blue_k1 += adjustStep;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.blue_k2 += adjustStep;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.blue_k3 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.blue_k1 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.blue_k2 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.blue_k3 += step;
                                     }
                                 }
                                 if (RenderFlags.HasFlag(RenderFlag.Right))
                                 {
                                     if (RenderFlags.HasFlag(RenderFlag.Red))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.red_k1 += adjustStep;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.red_k2 += adjustStep;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.red_k3 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.red_k1 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.red_k2 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.red_k3 += step;
                                     }
                                     if (RenderFlags.HasFlag(RenderFlag.Green))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.green_k1 += adjustStep;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.green_k2 += adjustStep;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.green_k3 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.green_k1 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.green_k2 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.green_k3 += step;
                                     }
 
                                     if (RenderFlags.HasFlag(RenderFlag.Blue))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.blue_k1 += adjustStep;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.blue_k2 += adjustStep;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.blue_k3 += adjustStep;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.blue_k1 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.blue_k2 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.blue_k3 += step;
                                     }
                                 }
                                 break;
@@ -424,8 +423,8 @@ namespace Undistort
                         ModeDescription = new ModeDescription
                         {
                             Format = Format.B8G8R8A8_UNorm,
-                            Width = windowEye.FrameSize.Width,
-                            Height = windowEye.FrameSize.Height,
+                            Width = WindowSize.Width,
+                            Height = WindowSize.Height,
                             RefreshRate = new Rational(90, 1)
                         },
                         OutputHandle = form.Handle,
@@ -434,22 +433,22 @@ namespace Undistort
                         Usage = Usage.RenderTargetOutput
                     };
 
-                    SharpDX.Direct3D11.Device.CreateWithSwapChain(adapter, DeviceCreationFlags.BgraSupport, swapChainDescription, out device, out swapChain);
+                    SharpDX.Direct3D11.Device.CreateWithSwapChain(adapter, DeviceCreationFlags.BgraSupport, swapChainDescription, out d3dDevice, out d3dSwapChain);
 
                     factory.MakeWindowAssociation(form.Handle, WindowAssociationFlags.None);
 
-                    deviceContext = device.ImmediateContext;
+                    d3dDeviceContext = d3dDevice.ImmediateContext;
 
-                    windowEye.Texture = swapChain.GetBackBuffer<Texture2D>(0);
-                    windowEye.TextureView = new RenderTargetView(device, windowEye.Texture);
+                    BackBufferTexture = d3dSwapChain.GetBackBuffer<Texture2D>(0);
+                    BackBufferTextureView = new RenderTargetView(d3dDevice, BackBufferTexture);
 
                     var depthBufferDescription = new Texture2DDescription
                     {
                         Format = Format.D16_UNorm,
                         ArraySize = 1,
                         MipLevels = 1,
-                        Width = windowEye.FrameSize.Width,
-                        Height = windowEye.FrameSize.Height,
+                        Width = WindowSize.Width,
+                        Height = WindowSize.Height,
                         SampleDescription = new SampleDescription(1, 0),
                         Usage = ResourceUsage.Default,
                         BindFlags = BindFlags.DepthStencil,
@@ -457,8 +456,8 @@ namespace Undistort
                         OptionFlags = ResourceOptionFlags.None
                     };
 
-                    windowEye.DepthTexture = new Texture2D(device, depthBufferDescription);
-                    windowEye.DepthStencilView = new DepthStencilView(device, windowEye.DepthTexture);
+                    BackBufferDepthTexture = new Texture2D(d3dDevice, depthBufferDescription);
+                    BackBufferDepthStencilView = new DepthStencilView(d3dDevice, BackBufferDepthTexture);
 
                     // Create Eye Textures
                     var eyeTextureDescription = new Texture2DDescription
@@ -475,40 +474,59 @@ namespace Undistort
                         Usage = ResourceUsage.Default
                     };
 
-                    leftEye.Texture = rightEye.Texture = new Texture2D(device, eyeTextureDescription);
-                    undistortTexture = new Texture2D(device, eyeTextureDescription);
+                    leftEye.Texture = rightEye.Texture = new Texture2D(d3dDevice, eyeTextureDescription);
+                    leftEye.TextureView = rightEye.TextureView = new RenderTargetView(d3dDevice, leftEye.Texture);
+                    leftEye.ShaderView = rightEye.ShaderView = new ShaderResourceView(d3dDevice, leftEye.Texture);
 
-                    leftEye.TextureView = rightEye.TextureView = new RenderTargetView(device, leftEye.Texture);
-                    leftEye.ShaderView = rightEye.ShaderView = new ShaderResourceView(device, leftEye.Texture);
-
-                    undistortTextureView = new RenderTargetView(device, undistortTexture);
+                    UndistortTexture = new Texture2D(d3dDevice, eyeTextureDescription);
+                    UndistortTextureView = new RenderTargetView(d3dDevice, UndistortTexture);
+                    UndistortShaderView = new ShaderResourceView(d3dDevice, UndistortTexture);
 
                     // Create Eye Depth Buffer
                     eyeTextureDescription.BindFlags = BindFlags.DepthStencil;
                     eyeTextureDescription.Format = Format.D32_Float;
+                    leftEye.DepthTexture = rightEye.DepthTexture = new Texture2D(d3dDevice, eyeTextureDescription);
+                    leftEye.DepthStencilView = rightEye.DepthStencilView = new DepthStencilView(d3dDevice, leftEye.DepthTexture);
 
-                    leftEye.DepthTexture = rightEye.DepthTexture = new Texture2D(device, eyeTextureDescription);
-                    leftEye.DepthStencilView = rightEye.DepthStencilView = new DepthStencilView(device, leftEye.DepthTexture);
+                    var modelLoader = new ModelLoader(d3dDevice);
 
-                    var modelLoader = new ModelLoader(device);
-
-                    environmentShader = new Shader(device, "Model_VS", "Model_PS", new InputElement[]
+                    environmentShader = new Shader(d3dDevice, "Model_VS", "Model_PS", new InputElement[]
                     {
                         new InputElement("POSITION", 0, Format.R32G32B32_Float, 0, 0),
                         new InputElement("NORMAL", 0, Format.R32G32B32_Float, 12, 0),
                         new InputElement("TEXCOORD", 0, Format.R32G32_Float, 24, 0)
                     });
 
-                    UndistortShader.Load(device);
+                    backbufferShader = new Shader(d3dDevice, "Backbuffer_VS", "Backbuffer_PS", new InputElement[]
+                    {
+                        new InputElement("POSITION", 0, Format.R32G32B32_Float, 0, 0),
+                        new InputElement("TEXCOORD", 0, Format.R32G32_Float, 12, 0)
+                    });
+
+                    BackBufferIndexBuffer = SharpDX.Direct3D11.Buffer.Create(d3dDevice, BindFlags.IndexBuffer, new int[] { 0, 2, 3, 0, 1, 2 });
+                    leftEye.BackBufferVertexBuffer = SharpDX.Direct3D11.Buffer.Create(d3dDevice, BindFlags.VertexBuffer, new float[] {
+                            -1f, -1f, 0f, 0, 1, //0
+                            0f, -1f, 0f, 1, 1,  //1
+                            0f, 1f, 0f, 1, 0,   //2
+                            -1f, 1f, 0f, 0, 0 //3
+                        });
+                    rightEye.BackBufferVertexBuffer = SharpDX.Direct3D11.Buffer.Create(d3dDevice, BindFlags.VertexBuffer, new float[] {
+                            0f, -1f, 0f, 0, 1, //0
+                            1f, -1f, 0f, 1, 1,  //1
+                            1f, 1f, 0f, 1, 0,   //2
+                            0f, 1f, 0f, 0, 0 //3
+                        });
+                   
+                    UndistortShader.Load(d3dDevice);
 
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\928165436\spacecpod\spacecpod.obj";
                     var fileName = ovrPath + @"..\..\workshop\content\250820\716774474\VertigoRoom\VertigoRoom.obj";
                     environmentModel = modelLoader.Load(fileName);
-                    environmentModel.SetInputLayout(device, ShaderSignature.GetInputSignature(environmentShader.vertexShaderByteCode));
+                    environmentModel.SetInputLayout(d3dDevice, ShaderSignature.GetInputSignature(environmentShader.vertexShaderByteCode));
 
                     fileName = ovrPath + "\\resources\\rendermodels\\vr_controller_vive_1_5\\vr_controller_vive_1_5.obj";
                     controllerModel = modelLoader.Load(fileName);
-                    controllerModel.SetInputLayout(device, ShaderSignature.GetInputSignature(environmentShader.vertexShaderByteCode));
+                    controllerModel.SetInputLayout(d3dDevice, ShaderSignature.GetInputSignature(environmentShader.vertexShaderByteCode));
 
                     for (uint cdevice = 0; cdevice < maxTrackedDeviceCount; cdevice++)
                     {
@@ -529,67 +547,67 @@ namespace Undistort
                         }
                     }
 
-                    vertexConstantBuffer = new SharpDX.Direct3D11.Buffer(device, Utilities.SizeOf<VertexShaderData>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
-                    pixelConstantBuffer = new SharpDX.Direct3D11.Buffer(device, Utilities.SizeOf<PixelShaderData>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
-                    coefficientConstantBuffer = new SharpDX.Direct3D11.Buffer(device, Utilities.SizeOf<DistortShaderData>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
+                    vertexConstantBuffer = new SharpDX.Direct3D11.Buffer(d3dDevice, Utilities.SizeOf<VertexShaderData>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
+                    pixelConstantBuffer = new SharpDX.Direct3D11.Buffer(d3dDevice, Utilities.SizeOf<PixelShaderData>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
+                    coefficientConstantBuffer = new SharpDX.Direct3D11.Buffer(d3dDevice, Utilities.SizeOf<DistortShaderData>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
 
                     var rasterizerStateDescription = RasterizerStateDescription.Default();
                     rasterizerStateDescription.IsFrontCounterClockwise = true;
                     rasterizerStateDescription.FillMode = FillMode.Solid;
                     rasterizerStateDescription.IsAntialiasedLineEnabled = false;
                     rasterizerStateDescription.IsMultisampleEnabled = true;
-                    rasterizerState = new RasterizerState(device, rasterizerStateDescription);
+                    SolidRasteizerState = new RasterizerState(d3dDevice, rasterizerStateDescription);
                     rasterizerStateDescription.CullMode = CullMode.None;
-                    ncRasterizerState = new RasterizerState(device, rasterizerStateDescription);
+                    ncRasterizerState = new RasterizerState(d3dDevice, rasterizerStateDescription);
                     rasterizerStateDescription.CullMode = CullMode.Back;
                     rasterizerStateDescription.FillMode = FillMode.Wireframe;
-                    wireFrameRasterizerState = new RasterizerState(device, rasterizerStateDescription);
+                    WireFrameRasterizerState = new RasterizerState(d3dDevice, rasterizerStateDescription);
                     rasterizerStateDescription.CullMode = CullMode.None;
-                    ncWireFrameRasterizerState = new RasterizerState(device, rasterizerStateDescription);
+                    ncWireFrameRasterizerState = new RasterizerState(d3dDevice, rasterizerStateDescription);
 
                     var blendStateDescription = BlendStateDescription.Default();
                     blendStateDescription.RenderTarget[0].BlendOperation = BlendOperation.Add;
                     blendStateDescription.RenderTarget[0].SourceBlend = BlendOption.One;
                     blendStateDescription.RenderTarget[0].DestinationBlend = BlendOption.One;
                     blendStateDescription.RenderTarget[0].IsBlendEnabled = true;
-                    blendState = new BlendState(device, blendStateDescription);
+                    blendState = new BlendState(d3dDevice, blendStateDescription);
 
                     var depthStateDescription = DepthStencilStateDescription.Default();
                     depthStateDescription.DepthComparison = Comparison.LessEqual;
                     depthStateDescription.IsDepthEnabled = true;
                     depthStateDescription.IsStencilEnabled = false;
-                    depthStencilState = new DepthStencilState(device, depthStateDescription);
+                    DepthStencilState = new DepthStencilState(d3dDevice, depthStateDescription);
 
                     var samplerStateDescription = SamplerStateDescription.Default();
 
                     samplerStateDescription.Filter = Filter.MinMagMipLinear;
-                    samplerStateDescription.BorderColor = clearColor;
+                    samplerStateDescription.BorderColor = d3dClearColor;
                     samplerStateDescription.AddressU = TextureAddressMode.Border;
                     samplerStateDescription.AddressV = TextureAddressMode.Border;
 
-                    samplerState = new SamplerState(device, samplerStateDescription);
+                    samplerState = new SamplerState(d3dDevice, samplerStateDescription);
 
-                    clearColor = new RawColor4(0.0f, 0.0f, 0.0f, 1);
+                    d3dClearColor = new RawColor4(0.0f, 0.0f, 0.0f, 1);
 
                     var vrEvent = new VREvent_t();
                     var eventSize = (uint)Utilities.SizeOf<VREvent_t>();
 
                     headMatrix = Matrix.Identity;
 
-                    deviceContext.VertexShader.SetConstantBuffer(0, vertexConstantBuffer);
-                    deviceContext.PixelShader.SetConstantBuffer(1, pixelConstantBuffer);
-                    deviceContext.PixelShader.SetConstantBuffer(2, coefficientConstantBuffer);
+                    d3dDeviceContext.VertexShader.SetConstantBuffer(0, vertexConstantBuffer);
+                    d3dDeviceContext.PixelShader.SetConstantBuffer(1, pixelConstantBuffer);
+                    d3dDeviceContext.PixelShader.SetConstantBuffer(2, coefficientConstantBuffer);
 
                     //lgy = -0.005899557863971562;
                     //rgy = -0.001024579015277309;                    
 
-                    leftEye.Board = new InfoBoardModel(); leftEye.Board.Init(device); leftEye.ShowBoard = true; windowEye.Board = leftEye.Board; windowEye.ShowBoard = true;
-                    rightEye.Board = new InfoBoardModel(); rightEye.Board.Init(device); rightEye.ShowBoard = true;
+                    leftEye.Board = new InfoBoardModel(); leftEye.Board.Init(d3dDevice); leftEye.ShowBoard = true;
+                    rightEye.Board = new InfoBoardModel(); rightEye.Board.Init(d3dDevice); rightEye.ShowBoard = true;
 
-                    CrossHairModel.Init(device, leftEye.Coefficients.center_green_x, leftEye.Coefficients.center_green_y, rightEye.Coefficients.center_green_x, rightEye.Coefficients.center_green_y);
+                    CrossHairModel.Init(d3dDevice, leftEye.Coefficients.center_green_x, leftEye.Coefficients.center_green_y, rightEye.Coefficients.center_green_x, rightEye.Coefficients.center_green_y);
                     CrossHairModel.MoveCenter(0, 0, 0, 0);
 
-                    hmaShader = new Shader(device, "HiddenMesh_VS", "HiddenMesh_PS", new InputElement[]
+                    hmaShader = new Shader(d3dDevice, "HiddenMesh_VS", "HiddenMesh_PS", new InputElement[]
                     {
                         new InputElement("POSITION", 0, Format.R32G32_Float, 0, 0)
                     });
@@ -614,9 +632,10 @@ namespace Undistort
                     }
 
 
-                    leftEye.HiddenAreaMeshVertexBuffer = SharpDX.Direct3D11.Buffer.Create(device, BindFlags.VertexBuffer, leftHAMVertices);
-                    rightEye.HiddenAreaMeshVertexBuffer = SharpDX.Direct3D11.Buffer.Create(device, BindFlags.VertexBuffer, rightHAMVertices);
-                    windowEye.HiddenAreaMeshVertexBuffer = leftEye.HiddenAreaMeshVertexBuffer;
+                    leftEye.HiddenAreaMeshVertexBuffer = SharpDX.Direct3D11.Buffer.Create(d3dDevice, BindFlags.VertexBuffer, leftHAMVertices);
+                    rightEye.HiddenAreaMeshVertexBuffer = SharpDX.Direct3D11.Buffer.Create(d3dDevice, BindFlags.VertexBuffer, rightHAMVertices);
+
+                    SetProjectionZoomLevel();
 
                     RenderLoop.Run(form, () =>
                     {
@@ -663,25 +682,31 @@ namespace Undistort
                         if (currentPoses[hmdID].bPoseIsValid)
                             Convert(ref currentPoses[hmdID].mDeviceToAbsoluteTracking, ref headMatrix);
 
-                        #region Render LeftEye and present
+                        d3dDeviceContext.ClearRenderTargetView(BackBufferTextureView, d3dClearColor); // clear backbuffer once
+                        d3dDeviceContext.ClearDepthStencilView(BackBufferDepthStencilView, DepthStencilClearFlags.Depth, 1.0f, 0);
+
+                        #region Render LeftEye
                         RenderView(ref leftEye);
                         #endregion 
 
-                        #region Render RightEye and present
+                        #region Render RightEye
                         RenderView(ref rightEye);
                         #endregion
 
-                        #region Render Left eye to Window 
-                        windowEye.Coefficients = leftEye.Coefficients;
-                        RenderView(ref windowEye);
-                        #endregion 
-
                         // Show Backbuffer
-                        swapChain.Present(0, PresentFlags.None);
+                        d3dSwapChain.Present(0, PresentFlags.None);
                     });
                 }
             }
 
+        }
+
+        private static void SetProjectionZoomLevel()
+        {
+            leftEye.Projection.M11 = leftEye.OriginalProjection.M11 * zoomLevel;
+            leftEye.Projection.M22 = leftEye.OriginalProjection.M22 * zoomLevel;
+            rightEye.Projection.M11 = leftEye.OriginalProjection.M11 * zoomLevel;
+            rightEye.Projection.M22 = leftEye.OriginalProjection.M22 * zoomLevel;
         }
 
         private static Matrix GetRawMatrix(EVREye eye, float zNear, float zFar)
@@ -690,7 +715,7 @@ namespace Undistort
             float fRight = 0f;
             float fTop = 0f;
             float fBottom = 0f;
-            vrSystem.GetProjectionRaw(eye, ref fLeft, ref fRight, ref fTop, ref fBottom);            
+            vrSystem.GetProjectionRaw(eye, ref fLeft, ref fRight, ref fTop, ref fBottom);
             var proj = new Matrix(0);
 
             float idx = 1.0f / (fRight - fLeft);
@@ -701,7 +726,7 @@ namespace Undistort
 
             proj.M11 = 2 * idx; proj.M13 = sx * idx;
             proj.M22 = 2 * idy; proj.M23 = sy * idy;
-            proj.M33 = -zFar * idz; proj.M34 = -zFar * zNear * idz;            
+            proj.M33 = -zFar * idz; proj.M34 = -zFar * zNear * idz;
             proj.M43 = -1.0f;
 
             proj.Transpose();
@@ -718,10 +743,9 @@ namespace Undistort
                         {
                             case ETrackedControllerRole.LeftHand:
                                 leftEye.ShowBoard = !leftEye.ShowBoard;
-                                windowEye.ShowBoard = leftEye.ShowBoard;
                                 break;
                             case ETrackedControllerRole.RightHand:
-                                rightEye.ShowBoard = !rightEye.ShowBoard;                                
+                                rightEye.ShowBoard = !rightEye.ShowBoard;
                                 break;
                         }
                         break;
@@ -759,36 +783,33 @@ namespace Undistort
 
         }
 
-        public static bool IsEyeActive(int eye)
+        public static bool IsEyeActive(EVREye eye)
         {
-            return (RenderFlags.HasFlag(RenderFlag.Left) && eye != 1) ||
-                   (RenderFlags.HasFlag(RenderFlag.Right) && eye == 1);
+            return (RenderFlags.HasFlag(RenderFlag.Left) && eye == EVREye.Eye_Left) ||
+                   (RenderFlags.HasFlag(RenderFlag.Right) && eye == EVREye.Eye_Right);
         }
 
         private static void RenderView(ref EyeData eye)
-        {
-            deviceContext.PixelShader.SetSampler(0, samplerState);
-            deviceContext.Rasterizer.SetViewport(0, 0, eye.FrameSize.Width, eye.FrameSize.Height);
-            deviceContext.OutputMerger.SetTargets(eye.DepthStencilView, eye.TextureView);
-            deviceContext.ClearRenderTargetView(eye.TextureView, clearColor);
-            deviceContext.ClearDepthStencilView(eye.DepthStencilView, DepthStencilClearFlags.Depth, 1.0f, 0);
+        {            
+            d3dDeviceContext.PixelShader.SetSampler(0, samplerState);
+            d3dDeviceContext.Rasterizer.SetViewport(0, 0, eye.FrameSize.Width, eye.FrameSize.Height);
+            d3dDeviceContext.OutputMerger.SetTargets(eye.DepthStencilView, eye.TextureView);
+            d3dDeviceContext.ClearRenderTargetView(eye.TextureView, d3dClearColor);
+            d3dDeviceContext.ClearDepthStencilView(eye.DepthStencilView, DepthStencilClearFlags.Depth, 1.0f, 0);
+            d3dDeviceContext.OutputMerger.SetDepthStencilState(DepthStencilState);
+            d3dDeviceContext.OutputMerger.SetBlendState(blendState);
+            d3dDeviceContext.Rasterizer.State = Wireframe ? WireFrameRasterizerState : SolidRasteizerState;
+            if (eye.Eye == EVREye.Eye_Left)
+                d3dDeviceContext.UpdateSubresource(ref leftEye.Coefficients, coefficientConstantBuffer);
+            else if (eye.Eye == EVREye.Eye_Right)
+                d3dDeviceContext.UpdateSubresource(ref rightEye.Coefficients, coefficientConstantBuffer);
 
-            deviceContext.OutputMerger.SetDepthStencilState(depthStencilState);
-            deviceContext.OutputMerger.SetBlendState(blendState);
-            deviceContext.Rasterizer.State = Wireframe ? wireFrameRasterizerState : rasterizerState;
-            if (eye.Eye == 0)
-                deviceContext.UpdateSubresource(ref leftEye.Coefficients, coefficientConstantBuffer);
-            else if (eye.Eye == 1)
-                deviceContext.UpdateSubresource(ref rightEye.Coefficients, coefficientConstantBuffer);
             //vertexShaderData.view = Matrix.Invert(eye.EyeToHeadView);
 
-            environmentShader.Apply(deviceContext);
+            environmentShader.Apply(d3dDeviceContext);
 
             pixelShaderData.LightPosition = new Vector4(0, 1, 0, 0);
 
-            vertexShaderData.Head = headMatrix; vertexShaderData.Head.Transpose();
-            vertexShaderData.EyeToHead = eye.EyeToHeadView; vertexShaderData.EyeToHead.Invert(); vertexShaderData.EyeToHead.Transpose();
-            vertexShaderData.Projection = eye.Projection; vertexShaderData.Projection.Transpose();
             vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * eye.Projection; vertexShaderData.WorldViewProj.Transpose();
 
             //vertexShaderData.Intrinsics = eye.Intrinsics; vertexShaderData.Intrinsics.Transpose();
@@ -798,23 +819,20 @@ namespace Undistort
                 if (i == 1 && !RenderFlags.HasFlag(RenderFlag.Green)) continue;
                 if (i == 2 && !RenderFlags.HasFlag(RenderFlag.Blue)) continue;
                 pixelShaderData.activecolor = i;
-                pixelShaderData.controller = 0;
-                //vertexShaderData.zoomLevel = Undistort? zoomLevel : 1.0;                
-                deviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
-                deviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
-                environmentModel.Render(deviceContext);
+                pixelShaderData.controller = 0;                       
+                d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+                d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
+                environmentModel.Render(d3dDeviceContext);
             }
 
-            deviceContext.OutputMerger.SetBlendState(null);
+            
             if (Wireframe) //revert            
-                deviceContext.Rasterizer.State = rasterizerState;
+                d3dDeviceContext.Rasterizer.State = SolidRasteizerState;
 
+            d3dDeviceContext.OutputMerger.SetBlendState(null);
+            CrossHairModel.Render(d3dDeviceContext, eye.Eye);
 
-            CrossHairModel.Render(deviceContext, eye.Eye);
-
-            //Render infoboard
-
-
+            //Render info panels
             pixelShaderData.activecolor = -1;
             pixelShaderData.controller = 1;
 
@@ -830,52 +848,59 @@ namespace Undistort
                 {
                     Convert(ref currentPoses[controllerId].mDeviceToAbsoluteTracking, ref controllerMat);
                     vertexShaderData.WorldViewProj = controllerMat * Matrix.Invert(eye.EyeToHeadView * headMatrix) * eye.Projection; vertexShaderData.WorldViewProj.Transpose();
-                    deviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
-                    deviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
-                    environmentShader.Apply(deviceContext); //back 
-                    controllerModel.Render(deviceContext);
+                    d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+                    d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
+                    environmentShader.Apply(d3dDeviceContext); //back 
+                    controllerModel.Render(d3dDeviceContext);
                     if (leftEye.ShowBoard && controllerRole == ETrackedControllerRole.LeftHand)
-                        leftEye.Board.Render(deviceContext, ref leftEye);
+                        leftEye.Board.Render(d3dDeviceContext, ref leftEye);
                     if (rightEye.ShowBoard && controllerRole == ETrackedControllerRole.RightHand)
-                        rightEye.Board.Render(deviceContext, ref rightEye);
+                        rightEye.Board.Render(d3dDeviceContext, ref rightEye);
                 }
             }
 
-            if (RenderHiddenMesh && IsEyeActive((int)eye.Eye))
+            if (RenderHiddenMesh && IsEyeActive(eye.Eye))
             {
-                deviceContext.Rasterizer.State = Wireframe ? ncWireFrameRasterizerState : ncRasterizerState;
-                //render hidden mesh area just for control distortion
-                vertexShaderData.Head = headMatrix; vertexShaderData.Head.Transpose();
-                vertexShaderData.EyeToHead = eye.EyeToHeadView; vertexShaderData.EyeToHead.Invert(); vertexShaderData.EyeToHead.Transpose();
-                vertexShaderData.Projection = eye.Projection; vertexShaderData.Projection.Transpose();
+                d3dDeviceContext.Rasterizer.State = Wireframe ? ncWireFrameRasterizerState : ncRasterizerState;
+                //render hidden mesh area just for control distortion area
                 vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * eye.Projection; vertexShaderData.WorldViewProj.Transpose();
-                deviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
-                deviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
-                deviceContext.OutputMerger.SetBlendState(null);
-                hmaShader.Apply(deviceContext);
-                deviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
+                d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+                d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
+                d3dDeviceContext.OutputMerger.SetBlendState(null);
+                d3dDeviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
                 hmaVertexBufferBinding = new VertexBufferBinding(eye.HiddenAreaMeshVertexBuffer, sizeof(float) * 2, 0);
-                deviceContext.InputAssembler.SetVertexBuffers(0, hmaVertexBufferBinding);
-                deviceContext.Draw((int)(3 * eye.HiddenAreaMesh.unTriangleCount), 0);
+                d3dDeviceContext.InputAssembler.SetVertexBuffers(0, hmaVertexBufferBinding);
+                hmaShader.Apply(d3dDeviceContext);
+                d3dDeviceContext.Draw((int)(3 * eye.HiddenAreaMesh.unTriangleCount), 0);
             }
 
-            if (Wireframe) //revert            
-                deviceContext.Rasterizer.State = rasterizerState;
-
+            if (Wireframe) //revert if in wireframe
+                d3dDeviceContext.Rasterizer.State = SolidRasteizerState;
 
             var texView = eye.TextureView;
+            var shaderView = eye.ShaderView;
 
             if (Undistort)
             {
                 //render and undistort         
-                if (eye.Eye != -1)
-                    texView = undistortTextureView;
-                UndistortShader.Render(deviceContext, ref eye);
+                texView = UndistortTextureView;
+                shaderView = UndistortShaderView;
+                UndistortShader.Render(d3dDeviceContext, ref eye);
             }
 
-            if (eye.Eye == -1)
-                return;
+            //render eye to screen            
+            d3dDeviceContext.Rasterizer.SetViewport(0, 0, WindowSize.Width, WindowSize.Height);                        
+            d3dDeviceContext.OutputMerger.SetTargets(BackBufferDepthStencilView, BackBufferTextureView);
+            d3dDeviceContext.OutputMerger.SetDepthStencilState(DepthStencilState);
+            d3dDeviceContext.OutputMerger.SetBlendState(null);
+            d3dDeviceContext.PixelShader.SetShaderResource(0, shaderView);
+            d3dDeviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
+            d3dDeviceContext.InputAssembler.SetVertexBuffers(0, new VertexBufferBinding(eye.BackBufferVertexBuffer, sizeof(float) * 5, 0));
+            d3dDeviceContext.InputAssembler.SetIndexBuffer(BackBufferIndexBuffer, Format.R32_UInt, 0);
+            backbufferShader.Apply(d3dDeviceContext);
+            d3dDeviceContext.DrawIndexed(6, 0, 0);
 
+            //submit to openvr
             var texture = new Texture_t
             {
                 eType = ETextureType.DirectX,
@@ -968,12 +993,6 @@ namespace Undistort
 
         private static void LoadLHSettings(string ovrPath)
         {
-            leftEye.Coefficients.Init(1);
-            rightEye.Coefficients.Init(1);
-            leftEye.Eye = (int)EVREye.Eye_Left;
-            rightEye.Eye = (int)EVREye.Eye_Right;
-            windowEye.Eye = -1;
-
             var toolPath = ovrPath + @"tools\lighthouse\bin\win32\lighthouse_console.exe";
             var confPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)) + "\\LH_Config_In.json";
             var processInfo = new ProcessStartInfo
@@ -1058,9 +1077,6 @@ namespace Undistort
             leftEye.Extrinsics.M32 = (float)System.Convert.ToDouble(col[1]);
             leftEye.Extrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
             leftEye.Extrinsics.M34 = (float)System.Convert.ToDouble(col[3]);
-
-            windowEye.Intrinsics = leftEye.Intrinsics;
-            windowEye.Extrinsics = leftEye.Extrinsics;
 
             row = rightEye.Json["intrinsics"] as object[];
             col = row[0] as object[];

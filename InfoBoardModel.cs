@@ -51,8 +51,8 @@ namespace Undistort
                 BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
                 CpuAccessFlags = CpuAccessFlags.Write,
                 Format = Format.B8G8R8A8_UNorm,
-                Width = windowEye.FrameSize.Width,
-                Height = windowEye.FrameSize.Height,
+                Width = WindowSize.Width,
+                Height = WindowSize.Height,
                 MipLevels = 1,
                 OptionFlags = ResourceOptionFlags.None,
                 SampleDescription = new SampleDescription(1, 0),
@@ -96,21 +96,21 @@ namespace Undistort
             var topPos = 0f;
             var str = eye.EyeName + " EYE INFO" + (IsEyeActive(eye.Eye) ? (RenderHiddenMesh && Program.Undistort) ? " - ACTIVE - HMA" : " - ACTIVE" : "") + "\n";
             str += "CENTERS\n";
-            textRenderTarget.DrawText(str, headerTextFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, windowEye.FrameSize.Width, windowEye.FrameSize.Height - topPos), textBrush);
+            textRenderTarget.DrawText(str, headerTextFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, WindowSize.Width, WindowSize.Height - topPos), textBrush);
             topPos += headerTextFormat.FontSize * 2;
-            str = "CH: " + (eye.Eye == 2 ? CrossHairModel.Centers.RightX : CrossHairModel.Centers.LeftX).ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
-            str += (eye.Eye == 2 ? CrossHairModel.Centers.RightY : CrossHairModel.Centers.LeftY).ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
+            str = "CH: " + (eye.Eye == Valve.VR.EVREye.Eye_Right ? CrossHairModel.Centers.RightX : CrossHairModel.Centers.LeftX).ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
+            str += (eye.Eye == Valve.VR.EVREye.Eye_Right ? CrossHairModel.Centers.RightY : CrossHairModel.Centers.LeftY).ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
             str += "Gc: " + eye.Coefficients.center_green_x.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
             str += eye.Coefficients.center_green_y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
             str += "Bc: " + eye.Coefficients.center_blue_x.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
             str += eye.Coefficients.center_blue_y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
             str += "Rc: " + eye.Coefficients.center_red_x.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
             str += eye.Coefficients.center_red_y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";            
-            textRenderTarget.DrawText(str, textFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, windowEye.FrameSize.Width, windowEye.FrameSize.Height - topPos), textBrush);
+            textRenderTarget.DrawText(str, textFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, WindowSize.Width, WindowSize.Height - topPos), textBrush);
             topPos += textFormat.FontSize * 5;
 
             str = "COEFFICIENTS\n";
-            textRenderTarget.DrawText(str, headerTextFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, windowEye.FrameSize.Width, windowEye.FrameSize.Height - topPos), textBrush);
+            textRenderTarget.DrawText(str, headerTextFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, WindowSize.Width, WindowSize.Height - topPos), textBrush);
             topPos += headerTextFormat.FontSize;
             str = "Gk: " + eye.Coefficients.green_k1.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
             str += eye.Coefficients.green_k2.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
@@ -121,7 +121,7 @@ namespace Undistort
             str += "Rk: " + eye.Coefficients.red_k1.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
             str += eye.Coefficients.red_k2.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
             str += eye.Coefficients.red_k3.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
-            textRenderTarget.DrawText(str, textFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, windowEye.FrameSize.Width, windowEye.FrameSize.Height - topPos), textBrush);
+            textRenderTarget.DrawText(str, textFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, WindowSize.Width, WindowSize.Height - topPos), textBrush);
             topPos += textFormat.FontSize * 4;
 
 

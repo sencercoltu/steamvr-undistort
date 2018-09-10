@@ -38,12 +38,10 @@ namespace Undistort
 
         public static void Render(DeviceContext context, ref EyeData eye)
         {
-            context.OutputMerger.SetDepthStencilState(Program.depthStencilState);
+            context.OutputMerger.SetDepthStencilState(Program.DepthStencilState);
             context.OutputMerger.SetBlendState(null);
 
-            var textureView = Program.undistortTextureView;
-            if (eye.Eye == -1)            
-                textureView = Program.windowEye.TextureView;
+            var textureView = Program.UndistortTextureView;
 
             context.Rasterizer.SetViewport(0, 0, eye.FrameSize.Width, eye.FrameSize.Height);
             context.ClearRenderTargetView(textureView, SharpDX.Color.Black);
@@ -53,7 +51,7 @@ namespace Undistort
             shader.Apply(context);
             context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;            
             context.InputAssembler.SetVertexBuffers(0, vertexBufferBinding);
-            context.PixelShader.SetShaderResource(0, Program.leftEye.ShaderView);
+            context.PixelShader.SetShaderResource(0, eye.ShaderView);
             context.Draw(6, 0);
         }
 

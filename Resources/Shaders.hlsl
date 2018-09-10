@@ -1,11 +1,6 @@
 cbuffer vertexConstBuffer : register(b0)
 {
-	float4x4 Head;
-	float4x4 EyeToHead;
-	float4x4 Projection;
 	float4x4 WorldViewProj;
-	//float4x4 Intrinsic;
-	//float4x4 Extrinsic;
 };
 
 cbuffer pixelConstBuffer : register(b1)
@@ -60,7 +55,7 @@ MODEL_PS_IN Model_VS(MODEL_VS_IN input)
 float4 Model_PS(MODEL_PS_IN input) : SV_Target
 {
 	float4 color = float4(1, 1, 1, 1); 
-	if (!wireframe || controller) //wireframe and not controller
+	if (!wireframe || controller)
 	{	
 		float3 L = normalize(lightPos.xyz - input.worldPos);
 		float3 N = normalize(input.normal);
@@ -77,9 +72,9 @@ float4 Model_PS(MODEL_PS_IN input) : SV_Target
 }
 
 
-float4 CrossHair_VS(float4 position : POSITION) : SV_POSITION
+float4 CrossHair_VS(float2 position : POSITION) : SV_POSITION
 {
-	return position;
+	return float4(position, 0, 1);
 }
 
 float4 CrossHair_PS(float4 position : SV_POSITION) : SV_Target
@@ -108,6 +103,19 @@ INFO_PS_IN Info_VS(INFO_VS_IN input)
 }
 
 float4 Info_PS(INFO_PS_IN input) : SV_Target
+{
+   return diffuseTexture.Sample(diffuseSampler, input.uv);
+}
+
+INFO_PS_IN Backbuffer_VS(INFO_VS_IN input)
+{
+	INFO_PS_IN output = (INFO_PS_IN)0;
+	output.pos = float4(input.pos, 1);
+	output.uv = input.uv;
+	return output;
+}
+
+float4 Backbuffer_PS(INFO_PS_IN input) : SV_Target
 {
    return diffuseTexture.Sample(diffuseSampler, input.uv);
 }
