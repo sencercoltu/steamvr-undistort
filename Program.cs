@@ -183,7 +183,7 @@ namespace Undistort
 
         public static RenderFlag RenderFlags = RenderFlag.ALL;
 
-        private static void MarshalUnmananagedArray2Struct<T>(IntPtr unmanagedArray, int length, out T[] mangagedArray)
+        private static void IntPtrToStructArray<T>(IntPtr unmanagedArray, int length, out T[] mangagedArray)
         {
             var size = Marshal.SizeOf(typeof(T));
             mangagedArray = new T[length];
@@ -229,7 +229,15 @@ namespace Undistort
             vrSystem.GetRecommendedRenderTargetSize(ref width, ref height);
 
             leftEye.FrameSize = rightEye.FrameSize = new Size((int)width, (int)height);
-            WindowSize = new Size(1080, 1200 / 2);
+            width *= 2;
+            
+            while (width > Screen.PrimaryScreen.Bounds.Width || height > Screen.PrimaryScreen.Bounds.Height)
+            {
+                width /= 2;
+                height /= 2;
+            }
+
+            WindowSize = new Size((int)width, (int)height);
 
             leftEye.Projection = leftEye.OriginalProjection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Left, 0.01f, 1000.0f));
             rightEye.OriginalProjection = rightEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Right, 0.01f, 1000.0f));
@@ -248,6 +256,7 @@ namespace Undistort
             {
                 using (var factory = new Factory4())
                 {
+                    form.StartPosition = FormStartPosition.CenterScreen;
                     form.Text = "SteamVR Coefficient Utility";
                     form.ClientSize = WindowSize;
                     form.FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -612,8 +621,8 @@ namespace Undistort
                         new InputElement("POSITION", 0, Format.R32G32_Float, 0, 0)
                     });
 
-                    MarshalUnmananagedArray2Struct<HmdVector2_t>(leftEye.HiddenAreaMesh.pVertexData, (int)(leftEye.HiddenAreaMesh.unTriangleCount * 3), out var leftHAMVertices);
-                    MarshalUnmananagedArray2Struct<HmdVector2_t>(rightEye.HiddenAreaMesh.pVertexData, (int)(rightEye.HiddenAreaMesh.unTriangleCount * 3), out var rightHAMVertices);
+                    IntPtrToStructArray<HmdVector2_t>(leftEye.HiddenAreaMesh.pVertexData, (int)(leftEye.HiddenAreaMesh.unTriangleCount * 3), out var leftHAMVertices);
+                    IntPtrToStructArray<HmdVector2_t>(rightEye.HiddenAreaMesh.pVertexData, (int)(rightEye.HiddenAreaMesh.unTriangleCount * 3), out var rightHAMVertices);
 
                     //convert 0/1 range to -1/1
                     for (var i = 0; i < leftHAMVertices.Length; i++)
