@@ -4,8 +4,8 @@ cbuffer vertexConstBuffer : register(b0)
 };
 
 cbuffer pixelConstBuffer : register(b1)
-{
-	float4 lightPos;
+{	
+	float4 lightPos;		
 	int undistort;
 	int wireframe;
 	int controller;
@@ -13,14 +13,17 @@ cbuffer pixelConstBuffer : register(b1)
 };
 
 cbuffer distortionConstBuffer : register(b2)
-{
-	float rk1, rk2, rk3;
-	float gk1, gk2, gk3;
-	float bk1, bk2, bk3;
-	float crx, cry;
-	float cgx, cgy;
-	float cbx, cby;
-	float reserved1;
+{	
+	float4 RedCoeffs;	
+	float4 GreenCoeffs;
+	float4 BlueCoeffs;
+	float4 RedCenter;
+	float4 GreenCenter;
+	float4 BlueCenter;	
+	float2 EyeCenter;
+	float GrowToUndistort;
+	float CutOff;
+	float Aspect;
 };
 
 Texture2D diffuseTexture : register(t0);
@@ -127,7 +130,7 @@ float4 HiddenMesh_VS(float2 position : POSITION) : SV_POSITION
 
 float4 HiddenMesh_PS(float4 position : SV_POSITION) : SV_Target
 {
-   return float4(0.0, 0.0, 0.0, 1.0); 
+   return float4(0.0, 0.0, 0.0, 1); 
 }
 
 struct Undistort_VS_IN
@@ -143,23 +146,79 @@ struct Undistort_PS_IN
 };
 
 Undistort_PS_IN Undistort_VS(Undistort_VS_IN input)
-{
-	Undistort_PS_IN output = (Undistort_PS_IN)0;
-	output.sv_pos = float4(input.pos.x, input.pos.y, 0, 1);
-	output.uv = input.uv;	
+{	
+	Undistort_PS_IN output = (Undistort_PS_IN)0;	
+	output.sv_pos = float4(input.pos, 0, 1);
+	output.uv = input.uv;
 	return output;
 }
 
 float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 {	
-	float gdx = (input.uv.x - 0.5) * 2.0 - cgx;
-	float gdy = (input.uv.y - 0.5) * 2.0 - cgy;
-	float gr2 = gdx * gdx + gdy * gdy;
-	float gr4 = gr2 * gr2;
-	float gr6 = gr4 * gr2;
-	float gk = 1.0 / (1 + gk1 * gr2 + gk2 * gr4 + gk3 * gr6);
-	float2 guv = float2((gdx * gk + cgx) / 2.0 + 0.5, (gdy * gk + cgy) / 2.0 + 0.5);
-	float4 gCol = diffuseTexture.Sample(diffuseSampler, guv);
+	float scale = 1.0 + GrowToUndistort;	
+
+	float2 UV = (input.uv * 2) - 1;	//convert 0;1 to -1;1	
+	UV.y *= Aspect;
+
+	float2 ruv = UV - RedCenter.xy;	
+	float rr2 = dot(ruv, ruv);		
+	float rk = 1.0 / (RedCoeffs.w + RedCoeffs.x * rr2 + RedCoeffs.y * rr2 * rr2 + RedCoeffs.z * rr2 * rr2 * rr2);
+	ruv = (ruv * rk + RedCenter.xy) / scale;	
+	ruv.y /= Aspect;
+	ruv = (ruv + 1) / 2;
+	float R = diffuseTexture.Sample(diffuseSampler, ruv).r;
+
+	float2 guv = UV - GreenCenter.xy;
+	float gr2 = dot(guv, guv);
+	float gk = 1.0 / (GreenCoeffs.w + GreenCoeffs.x * gr2 + GreenCoeffs.y * gr2 * gr2 + GreenCoeffs.z * gr2 * gr2 * gr2);
+	guv = (guv * gk + GreenCenter.xy) / scale;
+	guv.y /= Aspect;
+	guv = (guv + 1) / 2;
+	float G = diffuseTexture.Sample(diffuseSampler, guv).g;
+	
+	float2 buv = UV - BlueCenter.xy;
+	float br2 = dot(buv, buv);
+	float bk = 1.0 / (BlueCoeffs.w + BlueCoeffs.x * br2 + BlueCoeffs.y * br2 * br2 + BlueCoeffs.z * br2 * br2 * br2);
+	buv = (buv * bk + BlueCenter.xy) / scale;
+	buv.y /= Aspect;
+	buv = (buv + 1) / 2;
+	float B = diffuseTexture.Sample(diffuseSampler, buv).b;
+
+	return float4(R, G, B, 1);
+}
+
+
+/*
+float4 Undistort_PS2(Undistort_PS_IN input) : SV_Target
+{	
+
+	float2 cop = intrinsics._m13_m23;
+	float2 asp = intrinsics._m00_m11;
+	
+	float2 ret = float2((input.uv.x - 0.5) * 2.0, (input.uv.y - 0.5) * 2.0);
+
+	float2 diff = ret + cop;
+
+	float ratioX = 1.0 / asp.x ;
+	float ratioY = 1.0 / asp.y;
+
+	ret.x = diff.x * ratioX - cop.x;
+	ret.y = diff.y * ratioY - cop.y;
+	
+	float2 centerOfDistortion = float2(cgx, cgy);
+
+	float2 offset = ret - centerOfDistortion;
+	float r = sqrt(offset.x * offset.x + offset.y * offset.y);	
+
+	float radiusCoeff = 1.0 / (1.0 + gk1 * pow(r, 2) + gk2 * pow(r, 4) + gk3 * pow(r, 6));
+
+	ret.x = (centerOfDistortion.x + (offset.x * radiusCoeff)) / 2.0 + 0.5;
+	ret.y = (centerOfDistortion.y + (offset.y * radiusCoeff)) / 2.0 + 0.5;
+
+	return diffuseTexture.Sample(diffuseSampler, ret);
+
+
+
 
 	float bdx = (input.uv.x - 0.5) * 2.0 - cbx;
 	float bdy = (input.uv.y - 0.5) * 2.0 - cby;
@@ -180,4 +239,6 @@ float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 	float4 rCol = diffuseTexture.Sample(diffuseSampler, ruv);
 
 	return float4(rCol.r, gCol.g, bCol.b, 1);
+
 }
+*/

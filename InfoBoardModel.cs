@@ -98,33 +98,31 @@ namespace Undistort
             str += "CENTERS\n";
             textRenderTarget.DrawText(str, headerTextFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, WindowSize.Width, WindowSize.Height - topPos), textBrush);
             topPos += headerTextFormat.FontSize * 2;
-            str = "CH: " + (eye.Eye == Valve.VR.EVREye.Eye_Right ? CrossHairModel.Centers.RightX : CrossHairModel.Centers.LeftX).ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
-            str += (eye.Eye == Valve.VR.EVREye.Eye_Right ? CrossHairModel.Centers.RightY : CrossHairModel.Centers.LeftY).ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
-            str += "Gc: " + eye.Coefficients.center_green_x.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
-            str += eye.Coefficients.center_green_y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
-            str += "Bc: " + eye.Coefficients.center_blue_x.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
-            str += eye.Coefficients.center_blue_y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
-            str += "Rc: " + eye.Coefficients.center_red_x.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
-            str += eye.Coefficients.center_red_y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";            
+            str = "CH: " + eye.DistortionData.EyeCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
+            str += eye.DistortionData.EyeCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
+            str += "Gc: " + eye.DistortionData.GreenCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
+            str += eye.DistortionData.GreenCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
+            str += "Bc: " + eye.DistortionData.BlueCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
+            str += eye.DistortionData.BlueCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
+            str += "Rc: " + eye.DistortionData.RedCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
+            str += eye.DistortionData.RedCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";            
             textRenderTarget.DrawText(str, textFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, WindowSize.Width, WindowSize.Height - topPos), textBrush);
             topPos += textFormat.FontSize * 5;
 
             str = "COEFFICIENTS\n";
             textRenderTarget.DrawText(str, headerTextFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, WindowSize.Width, WindowSize.Height - topPos), textBrush);
             topPos += headerTextFormat.FontSize;
-            str = "Gk: " + eye.Coefficients.green_k1.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
-            str += eye.Coefficients.green_k2.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
-            str += eye.Coefficients.green_k3.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
-            str += "Bk: " + eye.Coefficients.blue_k1.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
-            str += eye.Coefficients.blue_k2.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
-            str += eye.Coefficients.blue_k3.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
-            str += "Rk: " + eye.Coefficients.red_k1.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
-            str += eye.Coefficients.red_k2.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
-            str += eye.Coefficients.red_k3.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
+            str = "Gk: " + eye.DistortionData.GreenCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
+            str += eye.DistortionData.GreenCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
+            str += eye.DistortionData.GreenCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
+            str += "Bk: " + eye.DistortionData.BlueCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
+            str += eye.DistortionData.BlueCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
+            str += eye.DistortionData.BlueCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
+            str += "Rk: " + eye.DistortionData.RedCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
+            str += eye.DistortionData.RedCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + " / ";
+            str += eye.DistortionData.RedCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture) + "\n";
             textRenderTarget.DrawText(str, textFormat, new SharpDX.Mathematics.Interop.RawRectangleF(0, topPos, WindowSize.Width, WindowSize.Height - topPos), textBrush);
             topPos += textFormat.FontSize * 4;
-
-
 
             textRenderTarget.EndDraw(out long tag1, out long tag2);
 

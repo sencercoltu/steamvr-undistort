@@ -16,8 +16,8 @@ namespace Undistort
         public Shader(Device device, string vsEntry, string psEntry, InputElement[] inputElems)
         {
             inputElements = inputElems;
-            vertexShaderByteCode = ShaderBytecode.Compile(Properties.Resources.Shaders, vsEntry, "vs_5_0");
-            pixelShaderByteCode = ShaderBytecode.Compile(Properties.Resources.Shaders, psEntry, "ps_5_0");
+            vertexShaderByteCode = ShaderBytecode.Compile(Properties.Resources.Shaders, vsEntry, "vs_5_0", ShaderFlags.Debug | ShaderFlags.OptimizationLevel0);
+            pixelShaderByteCode = ShaderBytecode.Compile(Properties.Resources.Shaders, psEntry, "ps_5_0", ShaderFlags.Debug | ShaderFlags.OptimizationLevel0);
             vertexShader = new VertexShader(device, vertexShaderByteCode);
             pixelShader = new PixelShader(device, pixelShaderByteCode);
             inputLayout = new InputLayout(device, ShaderSignature.GetInputSignature(vertexShaderByteCode), inputElements);

@@ -28,8 +28,8 @@ namespace Undistort
         }
 
         private struct PixelShaderData
-        {
-            public Vector4 LightPosition;
+        {            
+            public Vector4 LightPosition;            
             public int undistort;
             public int wireframe;
             public int controller;
@@ -38,25 +38,26 @@ namespace Undistort
 
         public struct DistortShaderData
         {
-            public void Init(float init = 0f)
-            {
-                reserved1 = 1.0f;
-                red_k1 = red_k2 = red_k3 = green_k1 = green_k2 = green_k3 = blue_k1 = blue_k2 = blue_k3 = init;
-                center_red_x = center_red_y = center_green_x = center_green_y = center_blue_x = center_blue_y = 0;
-            }
-            public float red_k1, red_k2, red_k3;
-            public float green_k1, green_k2, green_k3;
-            public float blue_k1, blue_k2, blue_k3;
-            public float center_red_x, center_red_y;
-            public float center_green_x, center_green_y;
-            public float center_blue_x, center_blue_y;
-            public float reserved1; //for alignment to 32 bytes
+            public Vector4 RedCoeffs;
+            public Vector4 GreenCoeffs;
+            public Vector4 BlueCoeffs;
+            public Vector4 RedCenter;
+            public Vector4 GreenCenter;
+            public Vector4 BlueCenter;
+            public Vector2 EyeCenter;
+            public float GrowToUndistort;
+            public float CutOff;
+            public float Aspect;
+            public float Reserved1;
+            public float Reserved2;
+            public float Reserved3;
+
         }
 
 
         public static bool Undistort;
         public static bool Wireframe;
-        public static bool RenderHiddenMesh;
+        public static bool RenderHiddenMesh = true;
 
         private static CVRSystem vrSystem;
         private static CVRCompositor vrCompositor;
@@ -110,18 +111,49 @@ namespace Undistort
 
         public static SharpDX.Direct3D11.Buffer BackBufferIndexBuffer;
 
+        public class TrackingToEyeTransform
+        {
+            public class Distortion
+            {
+                public float CenterX;
+                public float CenterY;
+                public float[] Coeffs = new float[8];
+                public string Type;
+            }
+            public Distortion Green = new Distortion();
+            public Distortion Blue = new Distortion();
+            public Distortion Red = new Distortion();
+            public Matrix Intrinsics;
+            public Matrix Extrinsics;
+            public float GrowToUndistort;
+            public float UndistortR2Cutoff;
+        }
+
+
+
         public class EyeData
         {
             public EyeData(EVREye eye)
             {
                 Eye = eye;
-                Coefficients.Init(1);                
+                ResetDistortion();
             }
+
+            public void ResetDistortion()
+            {                
+                DistortionData.RedCoeffs = Vector4.Zero; DistortionData.RedCoeffs.W = 1;
+                DistortionData.GreenCoeffs = Vector4.Zero; DistortionData.GreenCoeffs.W = 1;
+                DistortionData.BlueCoeffs = Vector4.Zero; DistortionData.BlueCoeffs.W = 1;
+                DistortionData.RedCenter = Vector4.Zero;
+                DistortionData.GreenCenter = Vector4.Zero;
+                DistortionData.BlueCenter = Vector4.Zero;
+            }
+
+
 
             public EVREye Eye;
             public Size FrameSize;
             public IDictionary<string, object> Json;
-            public DistortShaderData Coefficients;
             public Matrix Projection;
             public Matrix OriginalProjection;
             public Matrix EyeToHeadView;
@@ -132,8 +164,12 @@ namespace Undistort
             public ShaderResourceView ShaderView;
             public Texture2D DepthTexture;
             public DepthStencilView DepthStencilView;
-            public Matrix Intrinsics;
-            public Matrix Extrinsics;
+            public DistortShaderData DistortionData;
+            //public Matrix Intrinsics;
+            //public Matrix Extrinsics;
+            //public Vector2 Centers;
+            public float FocusX;
+            public float FocusY;
             public InfoBoardModel Board;
             public bool ShowBoard;
             public SharpDX.Direct3D11.Buffer BackBufferVertexBuffer;
@@ -152,6 +188,18 @@ namespace Undistort
                     }
                 }
             }
+            public TrackingToEyeTransform TTET = new TrackingToEyeTransform();
+            public Matrix CreateIntrinsics()
+            {
+                var ret = Matrix.Identity;
+                ret.M11 = 2.0f * FocusX / 1080.0f;
+                ret.M13 = -(DistortionData.EyeCenter.X);
+                ret.M22 = 2.0f * FocusY / 1200.0f;
+                ret.M23 = -(DistortionData.EyeCenter.Y);
+                ret.M33 = -1;                
+                return ret;
+            }
+
         }
 
 
@@ -179,7 +227,7 @@ namespace Undistort
             ALL = Red | Green | Blue | Left | Right | K1 | K2 | K3
         }
 
-        public static float zoomLevel = 1.0f;
+        //public static float zoomLevel = 1.0f;
 
         public static RenderFlag RenderFlags = RenderFlag.ALL;
 
@@ -239,9 +287,17 @@ namespace Undistort
 
             WindowSize = new Size((int)width, (int)height);
 
-            leftEye.Projection = leftEye.OriginalProjection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Left, 0.01f, 1000.0f));
-            rightEye.OriginalProjection = rightEye.Projection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Right, 0.01f, 1000.0f));
+            
+            
 
+            //HmdMatrix44_t dummyLeft = new HmdMatrix44_t { m0 = 1, m5 = 1, m2 = leftMat.m2, m6 = leftMat.m6, m10 = leftMat.m10, m11 = leftMat.m11, m14 = -1 };
+            //HmdMatrix44_t dummyRight = new HmdMatrix44_t { m0 = 1, m5 = 1, m2 = rightMat.m2, m6 = rightMat.m6, m10 = rightMat.m10, m11 = rightMat.m11, m14 = -1 };
+
+            //var x = GetRawMatrix(EVREye.Eye_Left, 0.01f, 1000.0f);
+
+            leftEye.Projection = leftEye.OriginalProjection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Left, 0.01f, 1000.0f));
+            rightEye.Projection = rightEye.OriginalProjection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Right, 0.01f, 1000.0f));
+            
             leftEye.EyeToHeadView = Convert(vrSystem.GetEyeToHeadTransform(EVREye.Eye_Left));
             rightEye.EyeToHeadView = Convert(vrSystem.GetEyeToHeadTransform(EVREye.Eye_Right));
 
@@ -271,33 +327,17 @@ namespace Undistort
                         File.WriteAllText(confPath, formatter.Format());
                     };
 
-                    form.KeyUp += (s, e) =>
-                    {
-                        RenderHiddenMesh = e.Control;
-                    };
 
                     form.KeyDown += (s, e) =>
                     {
-                        RenderHiddenMesh = e.Control;
+                        if (e.Control)
+                            RenderHiddenMesh = !RenderHiddenMesh;
 
                         switch (e.KeyCode)
                         {
                             case Keys.NumPad5:
                                 Undistort = !Undistort;
                                 pixelShaderData.undistort = Undistort ? 1 : 0;
-                                if (Undistort)
-                                {
-                                    //get raw matrix and modify scale value according to instrints/extrincts??
-                                    //leftEye.Projection = GetRawMatrix(EVREye.Eye_Left, 0.01f, 1000.0f);
-                                    //rightEye.Projection = GetRawMatrix(EVREye.Eye_Right, 0.01f, 1000.0f)
-                                    SetProjectionZoomLevel();
-                                }
-                                else
-                                {
-                                    //reset proj                                    
-                                    leftEye.Projection = leftEye.OriginalProjection;
-                                    rightEye.Projection = rightEye.OriginalProjection;
-                                }
                                 break;
                             case Keys.PageUp:
                                 Wireframe = !Wireframe;
@@ -331,18 +371,33 @@ namespace Undistort
                                 RenderFlags ^= RenderFlag.Right;
                                 break;
                             case Keys.Subtract:
-                                zoomLevel -= 0.01f;
-                                SetProjectionZoomLevel();
+                                if (RenderFlags.HasFlag(RenderFlag.Left))
+                                {
+                                    leftEye.FocusX--;
+                                    leftEye.FocusY--;
+                                }
+                                if (RenderFlags.HasFlag(RenderFlag.Right))
+                                {
+                                    rightEye.FocusX--;
+                                    rightEye.FocusY--;
+                                }
                                 break;
                             case Keys.Add:
-                                zoomLevel += 0.01f;
-                                SetProjectionZoomLevel();
+                                if (RenderFlags.HasFlag(RenderFlag.Left))
+                                {
+                                    leftEye.FocusX++;
+                                    leftEye.FocusY++;
+                                }
+                                if (RenderFlags.HasFlag(RenderFlag.Right))
+                                {
+                                    rightEye.FocusX++;
+                                    rightEye.FocusY++;
+                                }
                                 break;
                             case Keys.Home:
-                                if (RenderFlags.HasFlag(RenderFlag.Left)) leftEye.Coefficients.Init();
-                                if (RenderFlags.HasFlag(RenderFlag.Right)) rightEye.Coefficients.Init();
-                                //vertexShaderData.ResetZoom();
-                                break;
+                                if (RenderFlags.HasFlag(RenderFlag.Left)) { leftEye.ResetDistortion(); leftEye.DistortionData.EyeCenter.X = leftEye.DistortionData.EyeCenter.Y = 0; }
+                                if (RenderFlags.HasFlag(RenderFlag.Right)) { rightEye.ResetDistortion(); ; leftEye.DistortionData.EyeCenter.X = leftEye.DistortionData.EyeCenter.Y = 0; }
+                        break;
                             case Keys.Left:
                                 if (e.Shift)
                                     CrossHairModel.MoveCenter(RenderFlags.HasFlag(RenderFlag.Left) ? -adjustStep : 0, 0, RenderFlags.HasFlag(RenderFlag.Right) ? -adjustStep : 0, 0);
@@ -378,44 +433,44 @@ namespace Undistort
                                 {
                                     if (RenderFlags.HasFlag(RenderFlag.Red))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.red_k1 += step;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.red_k2 += step;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.red_k3 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.DistortionData.RedCoeffs.X += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.DistortionData.RedCoeffs.Y += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.DistortionData.RedCoeffs.Z += step;
                                     }
                                     if (RenderFlags.HasFlag(RenderFlag.Green))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.green_k1 += step;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.green_k2 += step;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.green_k3 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.DistortionData.GreenCoeffs.X += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.DistortionData.GreenCoeffs.Y += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.DistortionData.GreenCoeffs.Z += step;
                                     }
 
                                     if (RenderFlags.HasFlag(RenderFlag.Blue))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.Coefficients.blue_k1 += step;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.Coefficients.blue_k2 += step;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.Coefficients.blue_k3 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.DistortionData.BlueCoeffs.X += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.DistortionData.BlueCoeffs.Y += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.DistortionData.BlueCoeffs.Z += step;
                                     }
                                 }
                                 if (RenderFlags.HasFlag(RenderFlag.Right))
                                 {
                                     if (RenderFlags.HasFlag(RenderFlag.Red))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.red_k1 += step;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.red_k2 += step;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.red_k3 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.DistortionData.RedCoeffs.X += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.DistortionData.RedCoeffs.Y += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.DistortionData.RedCoeffs.Z += step;
                                     }
                                     if (RenderFlags.HasFlag(RenderFlag.Green))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.green_k1 += step;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.green_k2 += step;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.green_k3 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.DistortionData.GreenCoeffs.X += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.DistortionData.GreenCoeffs.Y += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.DistortionData.GreenCoeffs.Z += step;
                                     }
 
                                     if (RenderFlags.HasFlag(RenderFlag.Blue))
                                     {
-                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.Coefficients.blue_k1 += step;
-                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.Coefficients.blue_k2 += step;
-                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.Coefficients.blue_k3 += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.DistortionData.BlueCoeffs.X += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.DistortionData.BlueCoeffs.Y += step;
+                                        if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.DistortionData.BlueCoeffs.Z += step;
                                     }
                                 }
                                 break;
@@ -442,7 +497,7 @@ namespace Undistort
                         Usage = Usage.RenderTargetOutput
                     };
 
-                    SharpDX.Direct3D11.Device.CreateWithSwapChain(adapter, DeviceCreationFlags.BgraSupport, swapChainDescription, out d3dDevice, out d3dSwapChain);
+                    SharpDX.Direct3D11.Device.CreateWithSwapChain(adapter, DeviceCreationFlags.BgraSupport | DeviceCreationFlags.Debug, swapChainDescription, out d3dDevice, out d3dSwapChain);
 
                     factory.MakeWindowAssociation(form.Handle, WindowAssociationFlags.None);
 
@@ -529,7 +584,11 @@ namespace Undistort
                     UndistortShader.Load(d3dDevice);
 
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\928165436\spacecpod\spacecpod.obj";
-                    var fileName = ovrPath + @"..\..\workshop\content\250820\716774474\VertigoRoom\VertigoRoom.obj";
+                    //var fileName = ovrPath + @"..\..\workshop\content\250820\716774474\VertigoRoom\VertigoRoom.obj";
+                    //var fileName = ovrPath + @"..\..\workshop\content\250820\686754013\holochamber\holochamber.obj";
+                    var fileName = ovrPath + @"..\..\workshop\content\250820\717646476\TheCube\TheCube.obj";
+                    
+
                     environmentModel = modelLoader.Load(fileName);
                     environmentModel.SetInputLayout(d3dDevice, ShaderSignature.GetInputSignature(environmentShader.vertexShaderByteCode));
 
@@ -613,7 +672,7 @@ namespace Undistort
                     leftEye.Board = new InfoBoardModel(); leftEye.Board.Init(d3dDevice); leftEye.ShowBoard = true;
                     rightEye.Board = new InfoBoardModel(); rightEye.Board.Init(d3dDevice); rightEye.ShowBoard = true;
 
-                    CrossHairModel.Init(d3dDevice, leftEye.Coefficients.center_green_x, leftEye.Coefficients.center_green_y, rightEye.Coefficients.center_green_x, rightEye.Coefficients.center_green_y);
+                    CrossHairModel.Init(d3dDevice);
                     CrossHairModel.MoveCenter(0, 0, 0, 0);
 
                     hmaShader = new Shader(d3dDevice, "HiddenMesh_VS", "HiddenMesh_PS", new InputElement[]
@@ -644,7 +703,7 @@ namespace Undistort
                     leftEye.HiddenAreaMeshVertexBuffer = SharpDX.Direct3D11.Buffer.Create(d3dDevice, BindFlags.VertexBuffer, leftHAMVertices);
                     rightEye.HiddenAreaMeshVertexBuffer = SharpDX.Direct3D11.Buffer.Create(d3dDevice, BindFlags.VertexBuffer, rightHAMVertices);
 
-                    SetProjectionZoomLevel();
+                    //SetProjectionZoomLevel();
 
                     RenderLoop.Run(form, () =>
                     {
@@ -710,37 +769,37 @@ namespace Undistort
 
         }
 
-        private static void SetProjectionZoomLevel()
-        {
-            leftEye.Projection.M11 = leftEye.OriginalProjection.M11 * zoomLevel;
-            leftEye.Projection.M22 = leftEye.OriginalProjection.M22 * zoomLevel;
-            rightEye.Projection.M11 = leftEye.OriginalProjection.M11 * zoomLevel;
-            rightEye.Projection.M22 = leftEye.OriginalProjection.M22 * zoomLevel;
-        }
+        //private static void SetProjectionZoomLevel()
+        //{
+        //    leftEye.Projection.M11 = leftEye.OriginalProjection.M11 * zoomLevel;
+        //    leftEye.Projection.M22 = leftEye.OriginalProjection.M22 * zoomLevel;
+        //    rightEye.Projection.M11 = leftEye.OriginalProjection.M11 * zoomLevel;
+        //    rightEye.Projection.M22 = leftEye.OriginalProjection.M22 * zoomLevel;
+        //}
 
-        private static Matrix GetRawMatrix(EVREye eye, float zNear, float zFar)
-        {
-            float fLeft = 0f;
-            float fRight = 0f;
-            float fTop = 0f;
-            float fBottom = 0f;
-            vrSystem.GetProjectionRaw(eye, ref fLeft, ref fRight, ref fTop, ref fBottom);
-            var proj = new Matrix(0);
+        //private static Matrix GetRawMatrix(EVREye eye, float zNear, float zFar)
+        //{
+        //    float fLeft = 0f;
+        //    float fRight = 0f;
+        //    float fTop = 0f;
+        //    float fBottom = 0f;
+        //    vrSystem.GetProjectionRaw(eye, ref fLeft, ref fRight, ref fTop, ref fBottom);
+        //    var proj = new Matrix(0);
 
-            float idx = 1.0f / (fRight - fLeft);
-            float idy = 1.0f / (fBottom - fTop);
-            float idz = 1.0f / (zFar - zNear);
-            float sx = fRight + fLeft;
-            float sy = fBottom + fTop;
+        //    float idx = 1.0f / (fRight - fLeft);
+        //    float idy = 1.0f / (fBottom - fTop);
+        //    float idz = 1.0f / (zFar - zNear);
+        //    float sx = fRight + fLeft;
+        //    float sy = fBottom + fTop;
 
-            proj.M11 = 2 * idx; proj.M13 = sx * idx;
-            proj.M22 = 2 * idy; proj.M23 = sy * idy;
-            proj.M33 = -zFar * idz; proj.M34 = -zFar * zNear * idz;
-            proj.M43 = -1.0f;
+        //    proj.M11 = 2 * idx; proj.M13 = sx * idx;
+        //    proj.M22 = 2 * idy; proj.M23 = sy * idy;
+        //    proj.M33 = -zFar * idz; proj.M34 = -zFar * zNear * idz;
+        //    proj.M43 = -1.0f;
 
-            proj.Transpose();
-            return proj;
-        }
+        //    proj.Transpose();
+        //    return proj;
+        //}
 
         private static void ButtonPressed(ETrackedControllerRole role, ref VRControllerState_t state, EVRButtonId button)
         {
@@ -809,27 +868,27 @@ namespace Undistort
             d3dDeviceContext.OutputMerger.SetBlendState(blendState);
             d3dDeviceContext.Rasterizer.State = Wireframe ? WireFrameRasterizerState : SolidRasteizerState;
             if (eye.Eye == EVREye.Eye_Left)
-                d3dDeviceContext.UpdateSubresource(ref leftEye.Coefficients, coefficientConstantBuffer);
+                d3dDeviceContext.UpdateSubresource(ref leftEye.DistortionData, coefficientConstantBuffer);
             else if (eye.Eye == EVREye.Eye_Right)
-                d3dDeviceContext.UpdateSubresource(ref rightEye.Coefficients, coefficientConstantBuffer);
+                d3dDeviceContext.UpdateSubresource(ref rightEye.DistortionData, coefficientConstantBuffer);
 
-            //vertexShaderData.view = Matrix.Invert(eye.EyeToHeadView);
 
             environmentShader.Apply(d3dDeviceContext);
+            pixelShaderData.LightPosition = new Vector4(headMatrix.TranslationVector, 1);             
 
-            pixelShaderData.LightPosition = new Vector4(0, 1, 0, 0);
+            vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * eye.Projection;            
+            vertexShaderData.WorldViewProj.Transpose();
+            d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
 
-            vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * eye.Projection; vertexShaderData.WorldViewProj.Transpose();
+            //pixelShaderData.Intrinsics = Matrix.Invert(eye.CreateIntrinsics()); //pixelShaderData.Intrinsics.Transpose();            
 
-            //vertexShaderData.Intrinsics = eye.Intrinsics; vertexShaderData.Intrinsics.Transpose();
             for (int i = 0; i < 3; i++)
             {
                 if (i == 0 && !RenderFlags.HasFlag(RenderFlag.Red)) continue;
                 if (i == 1 && !RenderFlags.HasFlag(RenderFlag.Green)) continue;
                 if (i == 2 && !RenderFlags.HasFlag(RenderFlag.Blue)) continue;
                 pixelShaderData.activecolor = i;
-                pixelShaderData.controller = 0;                       
-                d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+                pixelShaderData.controller = 0;                                       
                 d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
                 environmentModel.Render(d3dDeviceContext);
             }
@@ -838,13 +897,19 @@ namespace Undistort
             if (Wireframe) //revert            
                 d3dDeviceContext.Rasterizer.State = SolidRasteizerState;
 
-            d3dDeviceContext.OutputMerger.SetBlendState(null);
-            CrossHairModel.Render(d3dDeviceContext, eye.Eye);
+
+            if (Undistort)
+            {
+                d3dDeviceContext.OutputMerger.SetBlendState(null);
+                CrossHairModel.Render(d3dDeviceContext, eye.Eye);
+            }
 
             //Render info panels
             pixelShaderData.activecolor = -1;
             pixelShaderData.controller = 1;
+            d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
 
+            d3dDeviceContext.OutputMerger.SetBlendState(null);
             Matrix controllerMat = default(Matrix);
             foreach (var controllerId in controllerIDs)
             {
@@ -856,9 +921,11 @@ namespace Undistort
                 if (currentPoses[controllerId].bPoseIsValid)
                 {
                     Convert(ref currentPoses[controllerId].mDeviceToAbsoluteTracking, ref controllerMat);
-                    vertexShaderData.WorldViewProj = controllerMat * Matrix.Invert(eye.EyeToHeadView * headMatrix) * eye.Projection; vertexShaderData.WorldViewProj.Transpose();
+
+                    vertexShaderData.WorldViewProj = controllerMat * Matrix.Invert(eye.EyeToHeadView * headMatrix) * eye.Projection;
+                    vertexShaderData.WorldViewProj.Transpose();
                     d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
-                    d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
+
                     environmentShader.Apply(d3dDeviceContext); //back 
                     controllerModel.Render(d3dDeviceContext);
                     if (leftEye.ShowBoard && controllerRole == ETrackedControllerRole.LeftHand)
@@ -872,10 +939,11 @@ namespace Undistort
             {
                 d3dDeviceContext.Rasterizer.State = Wireframe ? ncWireFrameRasterizerState : ncRasterizerState;
                 //render hidden mesh area just for control distortion area
-                vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * eye.Projection; vertexShaderData.WorldViewProj.Transpose();
+                vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * eye.Projection;
+                vertexShaderData.WorldViewProj.Transpose();
                 d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
-                d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
-                d3dDeviceContext.OutputMerger.SetBlendState(null);
+
+                //d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);                
                 d3dDeviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
                 hmaVertexBufferBinding = new VertexBufferBinding(eye.HiddenAreaMeshVertexBuffer, sizeof(float) * 2, 0);
                 d3dDeviceContext.InputAssembler.SetVertexBuffers(0, hmaVertexBufferBinding);
@@ -894,6 +962,12 @@ namespace Undistort
                 //render and undistort         
                 texView = UndistortTextureView;
                 shaderView = UndistortShaderView;
+                var m = Matrix.Identity;
+                m.TranslationVector = new Vector3(eye.TTET.Intrinsics.M13, eye.TTET.Intrinsics.M23, 0);
+                //m.ScaleVector = new Vector3(eye.TTET.Intrinsics.ScaleVector.X, eye.TTET.Intrinsics.ScaleVector.Y, 1);                
+                vertexShaderData.WorldViewProj = m;
+                vertexShaderData.WorldViewProj.Transpose();
+                d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
                 UndistortShader.Render(d3dDeviceContext, ref eye);
             }
 
@@ -1024,110 +1098,121 @@ namespace Undistort
             leftEye.Json = (transforms[0]) as IDictionary<string, object>;
             rightEye.Json = (transforms[1]) as IDictionary<string, object>;
 
-            var lgx = (float)System.Convert.ToDouble((leftEye.Json["distortion"] as Dictionary<string, object>)["center_x"]);
-            var lgy = (float)System.Convert.ToDouble((leftEye.Json["distortion"] as Dictionary<string, object>)["center_y"]);
-            var lbx = (float)System.Convert.ToDouble((leftEye.Json["distortion_blue"] as Dictionary<string, object>)["center_x"]);
-            var lby = (float)System.Convert.ToDouble((leftEye.Json["distortion_blue"] as Dictionary<string, object>)["center_y"]);
-            var lrx = (float)System.Convert.ToDouble((leftEye.Json["distortion_red"] as Dictionary<string, object>)["center_x"]);
-            var lry = (float)System.Convert.ToDouble((leftEye.Json["distortion_red"] as Dictionary<string, object>)["center_y"]);
+            leftEye.DistortionData.GreenCenter.X = (float)System.Convert.ToDouble((leftEye.Json["distortion"] as Dictionary<string, object>)["center_x"]);
+            leftEye.DistortionData.GreenCenter.Y = (float)System.Convert.ToDouble((leftEye.Json["distortion"] as Dictionary<string, object>)["center_y"]);
+            leftEye.DistortionData.BlueCenter.X = (float)System.Convert.ToDouble((leftEye.Json["distortion_blue"] as Dictionary<string, object>)["center_x"]);
+            leftEye.DistortionData.BlueCenter.Y = (float)System.Convert.ToDouble((leftEye.Json["distortion_blue"] as Dictionary<string, object>)["center_y"]);
+            leftEye.DistortionData.RedCenter.X = (float)System.Convert.ToDouble((leftEye.Json["distortion_red"] as Dictionary<string, object>)["center_x"]);
+            leftEye.DistortionData.RedCenter.Y = (float)System.Convert.ToDouble((leftEye.Json["distortion_red"] as Dictionary<string, object>)["center_y"]);
 
-            var rgx = (float)System.Convert.ToDouble((rightEye.Json["distortion"] as Dictionary<string, object>)["center_x"]);
-            var rgy = (float)System.Convert.ToDouble((rightEye.Json["distortion"] as Dictionary<string, object>)["center_y"]);
-            var rbx = (float)System.Convert.ToDouble((rightEye.Json["distortion_blue"] as Dictionary<string, object>)["center_x"]);
-            var rby = (float)System.Convert.ToDouble((rightEye.Json["distortion_blue"] as Dictionary<string, object>)["center_y"]);
-            var rrx = (float)System.Convert.ToDouble((rightEye.Json["distortion_red"] as Dictionary<string, object>)["center_x"]);
-            var rry = (float)System.Convert.ToDouble((rightEye.Json["distortion_red"] as Dictionary<string, object>)["center_y"]);
-
-
-            leftEye.Coefficients.center_green_x = lgx; leftEye.Coefficients.center_green_y = lgy;
-            leftEye.Coefficients.center_blue_x = lbx; leftEye.Coefficients.center_blue_y = lby;
-            leftEye.Coefficients.center_red_x = lrx; leftEye.Coefficients.center_red_y = lry;
-
-            rightEye.Coefficients.center_green_x = rgx; rightEye.Coefficients.center_green_y = rgy;
-            rightEye.Coefficients.center_blue_x = rbx; rightEye.Coefficients.center_blue_y = rby;
-            rightEye.Coefficients.center_red_x = rrx; rightEye.Coefficients.center_red_y = rry;
+            rightEye.DistortionData.GreenCenter.X = (float)System.Convert.ToDouble((rightEye.Json["distortion"] as Dictionary<string, object>)["center_x"]);
+            rightEye.DistortionData.GreenCenter.Y = (float)System.Convert.ToDouble((rightEye.Json["distortion"] as Dictionary<string, object>)["center_y"]);
+            rightEye.DistortionData.BlueCenter.X  = (float)System.Convert.ToDouble((rightEye.Json["distortion_blue"] as Dictionary<string, object>)["center_x"]);
+            rightEye.DistortionData.BlueCenter.Y  = (float)System.Convert.ToDouble((rightEye.Json["distortion_blue"] as Dictionary<string, object>)["center_y"]);
+            rightEye.DistortionData.RedCenter.X = (float)System.Convert.ToDouble((rightEye.Json["distortion_red"] as Dictionary<string, object>)["center_x"]);
+            rightEye.DistortionData.RedCenter.Y = (float)System.Convert.ToDouble((rightEye.Json["distortion_red"] as Dictionary<string, object>)["center_y"]);
 
             var lg = ((leftEye.Json["distortion"] as Dictionary<string, object>)["coeffs"] as object[]).Select(a => (float)System.Convert.ToDouble(a)).ToArray();
-            leftEye.Coefficients.green_k1 = lg[0]; leftEye.Coefficients.green_k2 = lg[1]; leftEye.Coefficients.green_k3 = lg[2];
+            leftEye.DistortionData.GreenCoeffs.X = lg[0]; leftEye.DistortionData.GreenCoeffs.Y = lg[1]; leftEye.DistortionData.GreenCoeffs.Z = lg[2];
             var lb = ((leftEye.Json["distortion_blue"] as Dictionary<string, object>)["coeffs"] as object[]).Select(a => (float)System.Convert.ToDouble(a)).ToArray();
-            leftEye.Coefficients.blue_k1 = lb[0]; leftEye.Coefficients.blue_k2 = lb[1]; leftEye.Coefficients.blue_k3 = lb[2];
+            leftEye.DistortionData.BlueCoeffs.X = lb[0]; leftEye.DistortionData.BlueCoeffs.Y = lb[1]; leftEye.DistortionData.BlueCoeffs.Z = lb[2];
             var lr = ((leftEye.Json["distortion_red"] as Dictionary<string, object>)["coeffs"] as object[]).Select(a => (float)System.Convert.ToDouble(a)).ToArray();
-            leftEye.Coefficients.red_k1 = lr[0]; leftEye.Coefficients.red_k2 = lr[1]; leftEye.Coefficients.red_k3 = lr[2];
+            leftEye.DistortionData.RedCoeffs.X = lr[0]; leftEye.DistortionData.RedCoeffs.Y = lr[1]; leftEye.DistortionData.RedCoeffs.Z = lr[2];
+
+            var rg = ((rightEye.Json["distortion"] as Dictionary<string, object>)["coeffs"] as object[]).Select(a => (float)System.Convert.ToDouble(a)).ToArray();
+            rightEye.DistortionData.GreenCoeffs.X = rg[0]; rightEye.DistortionData.GreenCoeffs.Y = rg[1]; rightEye.DistortionData.GreenCoeffs.Z = rg[2];
+            var rb = ((rightEye.Json["distortion_blue"] as Dictionary<string, object>)["coeffs"] as object[]).Select(a => (float)System.Convert.ToDouble(a)).ToArray();
+            rightEye.DistortionData.BlueCoeffs.X = rb[0]; rightEye.DistortionData.BlueCoeffs.Y = rb[1]; rightEye.DistortionData.BlueCoeffs.Z = rb[2];
+            var rr = ((rightEye.Json["distortion_red"] as Dictionary<string, object>)["coeffs"] as object[]).Select(a => (float)System.Convert.ToDouble(a)).ToArray();
+            rightEye.DistortionData.RedCoeffs.X = rr[0]; rightEye.DistortionData.RedCoeffs.Y = rr[1]; rightEye.DistortionData.RedCoeffs.Z = rr[2];
+
 
             var row = leftEye.Json["intrinsics"] as object[];
             var col = row[0] as object[];
-            leftEye.Intrinsics = new Matrix(1);
-            leftEye.Intrinsics.M11 = (float)System.Convert.ToDouble(col[0]);
-            leftEye.Intrinsics.M12 = (float)System.Convert.ToDouble(col[1]);
-            leftEye.Intrinsics.M13 = (float)System.Convert.ToDouble(col[2]);
+            leftEye.TTET.Intrinsics = Matrix.Identity;
+            leftEye.TTET.Intrinsics.M11 = (float)System.Convert.ToDouble(col[0]);
+            leftEye.TTET.Intrinsics.M21 = (float)System.Convert.ToDouble(col[1]);            
+            leftEye.TTET.Intrinsics.M31 = (float)System.Convert.ToDouble(col[2]);
             col = row[1] as object[];
-            leftEye.Intrinsics.M21 = (float)System.Convert.ToDouble(col[0]);
-            leftEye.Intrinsics.M22 = (float)System.Convert.ToDouble(col[1]);
-            leftEye.Intrinsics.M23 = (float)System.Convert.ToDouble(col[2]);
+            leftEye.TTET.Intrinsics.M12 = (float)System.Convert.ToDouble(col[0]);
+            leftEye.TTET.Intrinsics.M22 = (float)System.Convert.ToDouble(col[1]);            
+            leftEye.TTET.Intrinsics.M32 = (float)System.Convert.ToDouble(col[2]);
             col = row[2] as object[];
-            leftEye.Intrinsics.M31 = (float)System.Convert.ToDouble(col[0]);
-            leftEye.Intrinsics.M32 = (float)System.Convert.ToDouble(col[1]);
-            leftEye.Intrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
+            leftEye.TTET.Intrinsics.M13 = (float)System.Convert.ToDouble(col[0]);
+            leftEye.TTET.Intrinsics.M23 = (float)System.Convert.ToDouble(col[1]);            
+            leftEye.TTET.Intrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
+            //leftEye.TTET.Intrinsics.M44 = 1;
 
-            row = leftEye.Json["extrinsics"] as object[];
-            col = row[0] as object[];
-            leftEye.Extrinsics = new Matrix(1);
-            leftEye.Extrinsics.M11 = (float)System.Convert.ToDouble(col[0]);
-            leftEye.Extrinsics.M12 = (float)System.Convert.ToDouble(col[1]);
-            leftEye.Extrinsics.M13 = (float)System.Convert.ToDouble(col[2]);
-            leftEye.Extrinsics.M14 = (float)System.Convert.ToDouble(col[3]);
-            col = row[1] as object[];
-            leftEye.Extrinsics.M21 = (float)System.Convert.ToDouble(col[0]);
-            leftEye.Extrinsics.M22 = (float)System.Convert.ToDouble(col[1]);
-            leftEye.Extrinsics.M23 = (float)System.Convert.ToDouble(col[2]);
-            leftEye.Extrinsics.M24 = (float)System.Convert.ToDouble(col[3]);
-            col = row[2] as object[];
-            leftEye.Extrinsics.M31 = (float)System.Convert.ToDouble(col[0]);
-            leftEye.Extrinsics.M32 = (float)System.Convert.ToDouble(col[1]);
-            leftEye.Extrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
-            leftEye.Extrinsics.M34 = (float)System.Convert.ToDouble(col[3]);
+            leftEye.FocusX = 1080 * leftEye.TTET.Intrinsics.M11 / 2;
+            leftEye.FocusY = 1200 * leftEye.TTET.Intrinsics.M22 / 2;
+            leftEye.DistortionData.EyeCenter.X = -leftEye.TTET.Intrinsics.M31;
+            leftEye.DistortionData.EyeCenter.Y = -leftEye.TTET.Intrinsics.M32;
+            leftEye.DistortionData.Aspect = leftEye.TTET.Intrinsics.M11 / leftEye.TTET.Intrinsics.M22;
 
             row = rightEye.Json["intrinsics"] as object[];
             col = row[0] as object[];
-            rightEye.Intrinsics = new Matrix(1);
-            rightEye.Intrinsics.M11 = (float)System.Convert.ToDouble(col[0]);
-            rightEye.Intrinsics.M12 = (float)System.Convert.ToDouble(col[1]);
-            rightEye.Intrinsics.M13 = (float)System.Convert.ToDouble(col[2]);
+            rightEye.TTET.Intrinsics = Matrix.Identity;
+            rightEye.TTET.Intrinsics.M11 = (float)System.Convert.ToDouble(col[0]);
+            rightEye.TTET.Intrinsics.M21 = (float)System.Convert.ToDouble(col[1]);
+            rightEye.TTET.Intrinsics.M31 = (float)System.Convert.ToDouble(col[2]);
             col = row[1] as object[];
-            rightEye.Intrinsics.M21 = (float)System.Convert.ToDouble(col[0]);
-            rightEye.Intrinsics.M22 = (float)System.Convert.ToDouble(col[1]);
-            rightEye.Intrinsics.M23 = (float)System.Convert.ToDouble(col[2]);
+            rightEye.TTET.Intrinsics.M12 = (float)System.Convert.ToDouble(col[0]);
+            rightEye.TTET.Intrinsics.M22 = (float)System.Convert.ToDouble(col[1]);
+            rightEye.TTET.Intrinsics.M32 = (float)System.Convert.ToDouble(col[2]);
             col = row[2] as object[];
-            rightEye.Intrinsics.M31 = (float)System.Convert.ToDouble(col[0]);
-            rightEye.Intrinsics.M32 = (float)System.Convert.ToDouble(col[1]);
-            rightEye.Intrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
+            rightEye.TTET.Intrinsics.M13 = (float)System.Convert.ToDouble(col[0]);
+            rightEye.TTET.Intrinsics.M23 = (float)System.Convert.ToDouble(col[1]);
+            rightEye.TTET.Intrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
+            //rightEye.TTET.Intrinsics.M44 = 1;
+
+            rightEye.FocusX = 1080 * rightEye.TTET.Intrinsics.M11 / 2;
+            rightEye.FocusY = 1200 * rightEye.TTET.Intrinsics.M22 / 2;
+            rightEye.DistortionData.EyeCenter.X = -rightEye.TTET.Intrinsics.M31;
+            rightEye.DistortionData.EyeCenter.Y = -rightEye.TTET.Intrinsics.M32;
+            rightEye.DistortionData.Aspect = rightEye.TTET.Intrinsics.M11 / rightEye.TTET.Intrinsics.M22;
+
+            row = leftEye.Json["extrinsics"] as object[];
+            col = row[0] as object[];
+            leftEye.TTET.Extrinsics = new Matrix(0);
+            leftEye.TTET.Extrinsics.M11 = (float)System.Convert.ToDouble(col[0]);
+            leftEye.TTET.Extrinsics.M21 = (float)System.Convert.ToDouble(col[1]);
+            leftEye.TTET.Extrinsics.M31 = (float)System.Convert.ToDouble(col[2]);
+            leftEye.TTET.Extrinsics.M41 = (float)System.Convert.ToDouble(col[3]);
+            col = row[1] as object[];
+            leftEye.TTET.Extrinsics.M12 = (float)System.Convert.ToDouble(col[0]);
+            leftEye.TTET.Extrinsics.M22 = (float)System.Convert.ToDouble(col[1]);
+            leftEye.TTET.Extrinsics.M32 = (float)System.Convert.ToDouble(col[2]);
+            leftEye.TTET.Extrinsics.M42 = (float)System.Convert.ToDouble(col[3]);
+            col = row[2] as object[];
+            leftEye.TTET.Extrinsics.M13 = (float)System.Convert.ToDouble(col[0]);
+            leftEye.TTET.Extrinsics.M23 = (float)System.Convert.ToDouble(col[1]);
+            leftEye.TTET.Extrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
+            leftEye.TTET.Extrinsics.M43 = (float)System.Convert.ToDouble(col[3]);            
+            leftEye.TTET.Extrinsics.M44 = 1;
 
             row = rightEye.Json["extrinsics"] as object[];
             col = row[0] as object[];
-            rightEye.Extrinsics = new Matrix(1);
-            rightEye.Extrinsics.M11 = (float)System.Convert.ToDouble(col[0]);
-            rightEye.Extrinsics.M12 = (float)System.Convert.ToDouble(col[1]);
-            rightEye.Extrinsics.M13 = (float)System.Convert.ToDouble(col[2]);
-            rightEye.Extrinsics.M14 = (float)System.Convert.ToDouble(col[3]);
+            rightEye.TTET.Extrinsics = new Matrix(0);
+            rightEye.TTET.Extrinsics.M11 = (float)System.Convert.ToDouble(col[0]);
+            rightEye.TTET.Extrinsics.M21 = (float)System.Convert.ToDouble(col[1]);
+            rightEye.TTET.Extrinsics.M31 = (float)System.Convert.ToDouble(col[2]);
+            rightEye.TTET.Extrinsics.M41 = (float)System.Convert.ToDouble(col[3]);
             col = row[1] as object[];
-            rightEye.Extrinsics.M21 = (float)System.Convert.ToDouble(col[0]);
-            rightEye.Extrinsics.M22 = (float)System.Convert.ToDouble(col[1]);
-            rightEye.Extrinsics.M23 = (float)System.Convert.ToDouble(col[2]);
-            rightEye.Extrinsics.M24 = (float)System.Convert.ToDouble(col[3]);
+            rightEye.TTET.Extrinsics.M12 = (float)System.Convert.ToDouble(col[0]);
+            rightEye.TTET.Extrinsics.M22 = (float)System.Convert.ToDouble(col[1]);
+            rightEye.TTET.Extrinsics.M32 = (float)System.Convert.ToDouble(col[2]);
+            rightEye.TTET.Extrinsics.M42 = (float)System.Convert.ToDouble(col[3]);
             col = row[2] as object[];
-            rightEye.Extrinsics.M31 = (float)System.Convert.ToDouble(col[0]);
-            rightEye.Extrinsics.M32 = (float)System.Convert.ToDouble(col[1]);
-            rightEye.Extrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
-            rightEye.Extrinsics.M34 = (float)System.Convert.ToDouble(col[3]);
-
-            var rg = ((rightEye.Json["distortion"] as Dictionary<string, object>)["coeffs"] as object[]).Select(a => (float)System.Convert.ToDouble(a)).ToArray();
-            rightEye.Coefficients.green_k1 = rg[0]; rightEye.Coefficients.green_k2 = rg[1]; rightEye.Coefficients.green_k3 = rg[2];
-            var rb = ((rightEye.Json["distortion_blue"] as Dictionary<string, object>)["coeffs"] as object[]).Select(a => (float)System.Convert.ToDouble(a)).ToArray();
-            rightEye.Coefficients.blue_k1 = rb[0]; rightEye.Coefficients.blue_k2 = rb[1]; rightEye.Coefficients.blue_k3 = rb[2];
-            var rr = ((rightEye.Json["distortion_red"] as Dictionary<string, object>)["coeffs"] as object[]).Select(a => (float)System.Convert.ToDouble(a)).ToArray();
-            rightEye.Coefficients.red_k1 = rr[0]; rightEye.Coefficients.red_k2 = rr[1]; rightEye.Coefficients.red_k3 = rr[2];
-
-
+            rightEye.TTET.Extrinsics.M13 = (float)System.Convert.ToDouble(col[0]);
+            rightEye.TTET.Extrinsics.M23 = (float)System.Convert.ToDouble(col[1]);
+            rightEye.TTET.Extrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
+            rightEye.TTET.Extrinsics.M43 = (float)System.Convert.ToDouble(col[3]);
+            rightEye.TTET.Extrinsics.M44 = 1;
+                        
+            leftEye.DistortionData.GrowToUndistort = (float)System.Convert.ToDouble(leftEye.Json["grow_for_undistort"]);
+            leftEye.DistortionData.CutOff = (float)System.Convert.ToDouble(leftEye.Json["undistort_r2_cutoff"]);
+            rightEye.DistortionData.GrowToUndistort = (float)System.Convert.ToDouble(rightEye.Json["grow_for_undistort"]);
+            rightEye.DistortionData.CutOff = (float)System.Convert.ToDouble(rightEye.Json["undistort_r2_cutoff"]);
         }
 
 

@@ -3,6 +3,7 @@ using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using SharpDX.WIC;
 using System;
+using System.IO;
 using Buffer = SharpDX.Direct3D11.Buffer;
 using Device = SharpDX.Direct3D11.Device;
 
@@ -165,8 +166,22 @@ namespace Undistort
 
         private Texture2D LoadFromFile(Device device, ImagingFactory2 factory, string fileName)
         {
-            var bs = LoadBitmap(factory, fileName);
-            var texture = CreateTexture2DFromBitmap(device, bs);
+            Texture2D texture = null;
+            switch (Path.GetExtension(fileName).ToLowerInvariant())
+            { 
+            case ".tga":
+                {
+                    var scratch = DirectXTexNet.TexHelper.Instance.LoadFromTGAFile(fileName);
+                    texture = new Texture2D(scratch.CreateTexture(device.NativePointer));
+                    break;
+                }
+            default:
+                {
+                    var bs = LoadBitmap(factory, fileName);
+                    texture = CreateTexture2DFromBitmap(device, bs);
+                    break;
+                }
+            }
             return texture;
         }
     }
