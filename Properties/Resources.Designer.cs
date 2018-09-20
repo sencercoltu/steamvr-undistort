@@ -61,36 +61,47 @@ namespace Undistort.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap InfoTable {
+            get {
+                object obj = ResourceManager.GetObject("InfoTable", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to cbuffer vertexConstBuffer : register(b0)
-        ///{	
-        ///	float4x4 worldViewProj;
-        ///	float4x4 worldView;
-        ///	float4x4 world;	
+        ///{
+        ///	float4x4 WorldViewProj;
         ///};
         ///
         ///cbuffer pixelConstBuffer : register(b1)
-        ///{
-        ///	int undistort;
-        ///	int wireframe;
-        ///	int controller;
-        ///	int activecolor;
+        ///{	
+        ///	float4 LightPos;	
+        ///
+        ///	bool Undistort;
+        ///	bool Wireframe;
+        ///	bool Controller;	
+        ///
+        ///	int ActiveColor;
         ///};
         ///
         ///cbuffer distortionConstBuffer : register(b2)
-        ///{
-        ///	double rk1, rk2, rk3;
-        ///	double gk1, gk2, gk3;
-        ///	double bk1, bk2, bk3;
-        ///};
+        ///{	
+        ///	float4 RedCoeffs;	
+        ///	float4 GreenCoeffs;
+        ///	float4 BlueCoeffs;
+        ///	float4 RedCenter;
+        ///	float4 GreenCenter;
+        ///	float4 BlueCenter;	
+        ///	float2 EyeCenter; 
+        ///	float GrowToUndistort;
+        ///	float UndistortR2Cutoff;
         ///
-        ///Texture2D diffuseTexture : register(t0);;
-        ///
-        ///SamplerState diffuseSampler : register(s0);;
-        ///
-        ///struct VS_IN
-        ///{
-        ///	float3 pos : POSITION;
-        ///	float4 no [rest of string was truncated]&quot;;.
+        ///	float Aspect;
+        ///	float FocalX;
+        /// [rest of string was truncated]&quot;;.
         /// </summary>
         internal static string Shaders {
             get {

@@ -5,11 +5,13 @@ cbuffer vertexConstBuffer : register(b0)
 
 cbuffer pixelConstBuffer : register(b1)
 {	
-	float4 lightPos;		
-	int undistort;
-	int wireframe;
-	int controller;
-	int activecolor;
+	float4 LightPos;	
+
+	bool Undistort;
+	bool Wireframe;
+	bool Controller;	
+
+	int ActiveColor;
 };
 
 cbuffer distortionConstBuffer : register(b2)
@@ -20,10 +22,17 @@ cbuffer distortionConstBuffer : register(b2)
 	float4 RedCenter;
 	float4 GreenCenter;
 	float4 BlueCenter;	
-	float2 EyeCenter;
+	float2 EyeCenter; 
 	float GrowToUndistort;
-	float CutOff;
+	float UndistortR2Cutoff;
+
 	float Aspect;
+	float FocalX;
+	float FocalY;
+	float Reserved1;
+
+	float4x4 Extrinsics;
+	float3x3 Intrinsics;
 };
 
 Texture2D diffuseTexture : register(t0);
@@ -58,18 +67,18 @@ MODEL_PS_IN Model_VS(MODEL_VS_IN input)
 float4 Model_PS(MODEL_PS_IN input) : SV_Target
 {
 	float4 color = float4(1, 1, 1, 1); 
-	if (!wireframe || controller)
+	if (!Wireframe || Controller)
 	{	
-		float3 L = normalize(lightPos.xyz - input.worldPos);
+		float3 L = normalize(LightPos.xyz - input.worldPos);
 		float3 N = normalize(input.normal);
 		float3 diffuseTex = diffuseTexture.Sample(diffuseSampler, input.uv).xyz;
 		float3 diffuse = diffuseTex * saturate(dot(N,L));
 		color = float4(diffuse, 1);
 	}
 
-	if (activecolor == 0) color.g = color.b = 0;
-	else if (activecolor == 1) color.r = color.b = 0;
-	else if (activecolor == 2) color.r = color.g = 0;
+	if (ActiveColor == 0) color.g = color.b = 0;
+	else if (ActiveColor == 1) color.r = color.b = 0;
+	else if (ActiveColor == 2) color.r = color.g = 0;
 
 	return color;
 }
@@ -157,7 +166,7 @@ float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 {	
 	float scale = 1.0 + GrowToUndistort;	
 
-	float2 UV = (input.uv * 2) - 1;	//convert 0;1 to -1;1	
+	float2 UV = (input.uv * 2) - 1;	//convert [0;1] to [-1;1]	
 	UV.y *= Aspect;
 
 	float2 ruv = UV - RedCenter.xy;	
@@ -165,7 +174,7 @@ float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 	float rk = 1.0 / (RedCoeffs.w + RedCoeffs.x * rr2 + RedCoeffs.y * rr2 * rr2 + RedCoeffs.z * rr2 * rr2 * rr2);
 	ruv = (ruv * rk + RedCenter.xy) / scale;	
 	ruv.y /= Aspect;
-	ruv = (ruv + 1) / 2;
+	ruv = (ruv + 1) / 2; //convert [-1;1] back to [0;1]
 	float R = diffuseTexture.Sample(diffuseSampler, ruv).r;
 
 	float2 guv = UV - GreenCenter.xy;
@@ -187,58 +196,3 @@ float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 	return float4(R, G, B, 1);
 }
 
-
-/*
-float4 Undistort_PS2(Undistort_PS_IN input) : SV_Target
-{	
-
-	float2 cop = intrinsics._m13_m23;
-	float2 asp = intrinsics._m00_m11;
-	
-	float2 ret = float2((input.uv.x - 0.5) * 2.0, (input.uv.y - 0.5) * 2.0);
-
-	float2 diff = ret + cop;
-
-	float ratioX = 1.0 / asp.x ;
-	float ratioY = 1.0 / asp.y;
-
-	ret.x = diff.x * ratioX - cop.x;
-	ret.y = diff.y * ratioY - cop.y;
-	
-	float2 centerOfDistortion = float2(cgx, cgy);
-
-	float2 offset = ret - centerOfDistortion;
-	float r = sqrt(offset.x * offset.x + offset.y * offset.y);	
-
-	float radiusCoeff = 1.0 / (1.0 + gk1 * pow(r, 2) + gk2 * pow(r, 4) + gk3 * pow(r, 6));
-
-	ret.x = (centerOfDistortion.x + (offset.x * radiusCoeff)) / 2.0 + 0.5;
-	ret.y = (centerOfDistortion.y + (offset.y * radiusCoeff)) / 2.0 + 0.5;
-
-	return diffuseTexture.Sample(diffuseSampler, ret);
-
-
-
-
-	float bdx = (input.uv.x - 0.5) * 2.0 - cbx;
-	float bdy = (input.uv.y - 0.5) * 2.0 - cby;
-	float br2 = bdx * bdx + bdy * bdy;
-	float br4 = br2 * br2;
-	float br6 = br4 * br2;
-	float bk = 1.0 / (1 + bk1 * br2 + bk2 * br4 + bk3 * br6);
-	float2 buv = float2((bdx * bk + cbx) / 2.0 + 0.5, (bdy * bk + cby) / 2.0 + 0.5);
-	float4 bCol = diffuseTexture.Sample(diffuseSampler, buv);
-
-	float rdx = (input.uv.x - 0.5) * 2.0 - crx;
-	float rdy = (input.uv.y - 0.5) * 2.0 - cry;
-	float rr2 = rdx * rdx + rdy * rdy;
-	float rr4 = rr2 * rr2;
-	float rr6 = rr4 * rr2;
-	float rk = 1.0 / (1 + rk1 * rr2 + rk2 * rr4 + rk3 * rr6);
-	float2 ruv = float2((rdx * rk + crx) / 2.0 + 0.5, (rdy * rk + cry) / 2.0 + 0.5);
-	float4 rCol = diffuseTexture.Sample(diffuseSampler, ruv);
-
-	return float4(rCol.r, gCol.g, bCol.b, 1);
-
-}
-*/
