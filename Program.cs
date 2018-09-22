@@ -233,15 +233,18 @@ namespace Undistort
         [Flags]
         public enum RenderFlag
         {
-            Red = 1 << 0,
-            Green = 1 << 1,
-            Blue = 1 << 2,
+            RedActive = 1 << 0,
+            GreenActive = 1 << 1,
+            BlueActive = 1 << 2,
             Left = 1 << 3,
             Right = 1 << 4,
             K1 = 1 << 5,
             K2 = 1 << 6,
             K3 = 1 << 7,
-            ALL = Red | Green | Blue | Left | Right | K1 | K2 | K3
+            RenderRed = 1 << 8,
+            RenderGreen = 1 << 9,
+            RenderBlue = 1 << 10,
+            ALL = RedActive | GreenActive | BlueActive | Left | Right | K1 | K2 | K3 | RenderRed | RenderGreen | RenderBlue
         }
 
         //public static float zoomLevel = 1.0f;
@@ -260,7 +263,7 @@ namespace Undistort
             }
         }
 
-        public static float adjustStep = 0.001f;
+        public static float AdjustStep = 0.001f;
 
         [STAThread]
         private static void Main()
@@ -352,13 +355,13 @@ namespace Undistort
                                 form.Close();
                                 break;
                             case Keys.NumPad7:
-                                RenderFlags ^= RenderFlag.Red;
+                                RenderFlags ^= RenderFlag.RedActive;
                                 break;
                             case Keys.NumPad8:
-                                RenderFlags ^= RenderFlag.Green;
+                                RenderFlags ^= RenderFlag.GreenActive;
                                 break;
                             case Keys.NumPad9:
-                                RenderFlags ^= RenderFlag.Blue;
+                                RenderFlags ^= RenderFlag.BlueActive;
                                 break;
                             case Keys.NumPad1:
                                 RenderFlags ^= RenderFlag.K1;
@@ -376,23 +379,23 @@ namespace Undistort
                                 RenderFlags ^= RenderFlag.Right;
                                 break;
                             case Keys.Subtract:
-                                MoveFocus(-adjustStep);                                
+                                AdjustFocus(-AdjustStep, -AdjustStep);                                
                                 break;
                             case Keys.Add:
-                                MoveFocus(adjustStep);
+                                AdjustFocus(AdjustStep, AdjustStep);
                                 break;
                             case Keys.Home:
                                 ResetEyes();
                                 break;
                             case Keys.Left:
                                 if (e.Shift)
-                                    MoveEyeCenters(-adjustStep, 0);
+                                    AdjustEyeCenters(-AdjustStep, 0);
                                 else
                                     IncreaseAdjustStep();
                                 break;
                             case Keys.Right:
                                 if (e.Shift)
-                                    MoveEyeCenters(adjustStep, 0);
+                                    AdjustEyeCenters(AdjustStep, 0);
                                 else
                                     DecreaseAdjustStep();
                                 break;
@@ -401,15 +404,15 @@ namespace Undistort
                                 if (e.Shift)
                                 {
                                     if (e.KeyCode == Keys.Down && e.Shift)
-                                        MoveEyeCenters(0, -adjustStep);
+                                        AdjustEyeCenters(0, -AdjustStep);
                                     if (e.KeyCode == Keys.Up && e.Shift)
-                                        MoveEyeCenters(0, adjustStep);
+                                        AdjustEyeCenters(0, AdjustStep);
                                     break;
                                 }
 
-                                var step = adjustStep;
+                                var step = AdjustStep;
                                 if (e.KeyCode == Keys.Down) step *= -1f;
-                                ChangeCoefficients(step);
+                                AdjustCoefficients(step);
                                 break;
                         }
                     };
@@ -603,7 +606,7 @@ namespace Undistort
                     d3dDeviceContext.PixelShader.SetConstantBuffer(1, pixelConstantBuffer);
                     d3dDeviceContext.PixelShader.SetConstantBuffer(2, coefficientConstantBuffer);
 
-                    InfoBoardModel.Init(d3dDevice, leftEye); 
+                    InfoBoardModel.Init(d3dDevice); 
                     CrossHairModel.Init(d3dDevice);
                     CrossHairModel.MoveCenter(0, 0, 0, 0);
 
@@ -643,6 +646,7 @@ namespace Undistort
                         {
                             switch ((EVREventType)vrEvent.eventType)
                             {
+                                case EVREventType.VREvent_TrackedDeviceRoleChanged:
                                 case EVREventType.VREvent_TrackedDeviceUpdated:
                                     controllers.Remove(vrEvent.trackedDeviceIndex);
                                     controllers.Add(vrEvent.trackedDeviceIndex, vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex));
@@ -701,53 +705,93 @@ namespace Undistort
 
         }
 
-        private static void ToggleHiddenMesh()
+        public static void ToggleHiddenMesh()
         {
             RenderHiddenMesh = !RenderHiddenMesh;
         }
 
-        private static void DecreaseAdjustStep()
+        public static void DecreaseAdjustStep()
         {
-            adjustStep /= 10;
-            if (adjustStep < 0.00000001f) adjustStep = 0.00000001f;
+            AdjustStep /= 10;
+            if (AdjustStep < 0.00000001f) AdjustStep = 0.00000001f;
         }
 
-        private static void IncreaseAdjustStep()
+        public static void IncreaseAdjustStep()
         {
-            adjustStep *= 10;
-            if (adjustStep > 1) adjustStep = 1;
+            AdjustStep *= 10;
+            if (AdjustStep > 1) AdjustStep = 1;
         }
 
-        private static void MoveEyeCenters(float xStep, float yStep)
+        public static void AdjustEyeCenters(float xStep, float yStep)
         {
             CrossHairModel.MoveCenter(RenderFlags.HasFlag(RenderFlag.Left) ? xStep : 0, RenderFlags.HasFlag(RenderFlag.Left) ? yStep : 0, RenderFlags.HasFlag(RenderFlag.Right) ? xStep : 0, RenderFlags.HasFlag(RenderFlag.Right) ? yStep : 0);            
         }
 
-        private static void ResetEyes()
+        public static void AdjustColorCenters(float xStep, float yStep)
+        {
+            if (RenderFlags.HasFlag(RenderFlag.Left))
+            {
+                if (RenderFlags.HasFlag(RenderFlag.RedActive))
+                {
+                    leftEye.DistortionData.RedCenter.X += xStep;
+                    leftEye.DistortionData.RedCenter.Y += yStep;
+                }
+                if (RenderFlags.HasFlag(RenderFlag.GreenActive))
+                {
+                    leftEye.DistortionData.GreenCenter.X += xStep;
+                    leftEye.DistortionData.GreenCenter.Y += yStep;
+                }
+                if (RenderFlags.HasFlag(RenderFlag.BlueActive))
+                {
+                    leftEye.DistortionData.BlueCenter.X += xStep;
+                    leftEye.DistortionData.BlueCenter.Y += yStep;
+                }
+            }
+            if (RenderFlags.HasFlag(RenderFlag.Right))
+            {
+                if (RenderFlags.HasFlag(RenderFlag.RedActive))
+                {
+                    rightEye.DistortionData.RedCenter.X += xStep;
+                    rightEye.DistortionData.RedCenter.Y += yStep;
+                }
+                if (RenderFlags.HasFlag(RenderFlag.GreenActive))
+                {
+                    rightEye.DistortionData.GreenCenter.X += xStep;
+                    rightEye.DistortionData.GreenCenter.Y += yStep;
+                }
+                if (RenderFlags.HasFlag(RenderFlag.BlueActive))
+                {
+                    rightEye.DistortionData.BlueCenter.X += xStep;
+                    rightEye.DistortionData.BlueCenter.Y += yStep;
+                }
+            }
+        }
+
+        public static void ResetEyes()
         {
             if (RenderFlags.HasFlag(RenderFlag.Left)) { leftEye.ResetDistortionCoefficients(); leftEye.ResetEyeCenters(); }
             if (RenderFlags.HasFlag(RenderFlag.Right)) { rightEye.ResetDistortionCoefficients(); rightEye.ResetEyeCenters(); }
 
         }
 
-        private static void ChangeCoefficients(float step)
+        public static void AdjustCoefficients(float step)
         {
             if (RenderFlags.HasFlag(RenderFlag.Left))
             {
-                if (RenderFlags.HasFlag(RenderFlag.Red))
+                if (RenderFlags.HasFlag(RenderFlag.RedActive))
                 {
                     if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.DistortionData.RedCoeffs.X += step;
                     if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.DistortionData.RedCoeffs.Y += step;
                     if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.DistortionData.RedCoeffs.Z += step;
                 }
-                if (RenderFlags.HasFlag(RenderFlag.Green))
+                if (RenderFlags.HasFlag(RenderFlag.GreenActive))
                 {
                     if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.DistortionData.GreenCoeffs.X += step;
                     if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.DistortionData.GreenCoeffs.Y += step;
                     if (RenderFlags.HasFlag(RenderFlag.K3)) leftEye.DistortionData.GreenCoeffs.Z += step;
                 }
 
-                if (RenderFlags.HasFlag(RenderFlag.Blue))
+                if (RenderFlags.HasFlag(RenderFlag.BlueActive))
                 {
                     if (RenderFlags.HasFlag(RenderFlag.K1)) leftEye.DistortionData.BlueCoeffs.X += step;
                     if (RenderFlags.HasFlag(RenderFlag.K2)) leftEye.DistortionData.BlueCoeffs.Y += step;
@@ -756,20 +800,20 @@ namespace Undistort
             }
             if (RenderFlags.HasFlag(RenderFlag.Right))
             {
-                if (RenderFlags.HasFlag(RenderFlag.Red))
+                if (RenderFlags.HasFlag(RenderFlag.RedActive))
                 {
                     if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.DistortionData.RedCoeffs.X += step;
                     if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.DistortionData.RedCoeffs.Y += step;
                     if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.DistortionData.RedCoeffs.Z += step;
                 }
-                if (RenderFlags.HasFlag(RenderFlag.Green))
+                if (RenderFlags.HasFlag(RenderFlag.GreenActive))
                 {
                     if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.DistortionData.GreenCoeffs.X += step;
                     if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.DistortionData.GreenCoeffs.Y += step;
                     if (RenderFlags.HasFlag(RenderFlag.K3)) rightEye.DistortionData.GreenCoeffs.Z += step;
                 }
 
-                if (RenderFlags.HasFlag(RenderFlag.Blue))
+                if (RenderFlags.HasFlag(RenderFlag.BlueActive))
                 {
                     if (RenderFlags.HasFlag(RenderFlag.K1)) rightEye.DistortionData.BlueCoeffs.X += step;
                     if (RenderFlags.HasFlag(RenderFlag.K2)) rightEye.DistortionData.BlueCoeffs.Y += step;
@@ -778,32 +822,61 @@ namespace Undistort
             }
         }
 
-        private static void ToggleWireFrame()
+        public static void ToggleWireFrame()
         {   
             pixelShaderData.Wireframe = !pixelShaderData.Wireframe;
         }
 
-        private static void ToggleDistortion()
+        public static void ToggleDistortion()
         {
             pixelShaderData.Undistort = !pixelShaderData.Undistort;
         }
 
-        private static void MoveFocus(float adjustStep)
+        public static void AdjustFocus(float stepX, float stepY)
         {
             if (RenderFlags.HasFlag(RenderFlag.Left))
             {
-                leftEye.DistortionData.FocalX += adjustStep;
-                leftEye.DistortionData.FocalY += adjustStep;
+                leftEye.DistortionData.FocalX += stepX;
+                leftEye.DistortionData.FocalY += stepY;
                 leftEye.UpdateIntrinsicsFromFocusAndCenter();
             }
             if (RenderFlags.HasFlag(RenderFlag.Right))
             {
-                rightEye.DistortionData.FocalX += adjustStep;
-                rightEye.DistortionData.FocalY += adjustStep;
+                rightEye.DistortionData.FocalX += stepX;
+                rightEye.DistortionData.FocalY += stepY;
                 rightEye.UpdateIntrinsicsFromFocusAndCenter();
             }
         }
-        
+
+        public static void AdjustGrow(float adjustStep)
+        {
+            if (RenderFlags.HasFlag(RenderFlag.Left))
+            {
+                leftEye.DistortionData.GrowToUndistort += adjustStep;
+                leftEye.UpdateIntrinsicsFromFocusAndCenter();
+            }
+            if (RenderFlags.HasFlag(RenderFlag.Right))
+            {
+                rightEye.DistortionData.GrowToUndistort += adjustStep;
+                rightEye.UpdateIntrinsicsFromFocusAndCenter();
+            }
+        }
+
+
+        public static void AdjustCutoff(float adjustStep)
+        {
+            if (RenderFlags.HasFlag(RenderFlag.Left))
+            {
+                leftEye.DistortionData.UndistortR2Cutoff += adjustStep;
+                leftEye.UpdateIntrinsicsFromFocusAndCenter();
+            }
+            if (RenderFlags.HasFlag(RenderFlag.Right))
+            {
+                rightEye.DistortionData.UndistortR2Cutoff += adjustStep;
+                rightEye.UpdateIntrinsicsFromFocusAndCenter();
+            }
+        }
+
         //private static Matrix GetRawMatrix(EVREye eye, float zNear, float zFar)
         //{
         //    float fLeft = 0f;
@@ -834,15 +907,7 @@ namespace Undistort
             {
                 case EVRButtonId.k_EButton_Grip: //grip
                     {
-                        switch (role)
-                        {
-                            case ETrackedControllerRole.LeftHand:
-                                ToggleInfoPanel();
-                                break;
-                            case ETrackedControllerRole.RightHand:
-                                ToggleHiddenMesh();
-                                break;
-                        }
+                        InfoBoardModel.ButtonPressed("G", role);
                         break;
                     }
                 case EVRButtonId.k_EButton_ApplicationMenu: //grip
@@ -866,6 +931,15 @@ namespace Undistort
                         if (state.rAxis0.x > -0.3 && state.rAxis0.x < 0.3 && state.rAxis0.y > -0.3 && state.rAxis0.y < 0.3)
                         {
                             //center pressed
+                            switch (role)
+                            {
+                                case ETrackedControllerRole.LeftHand:
+                                    ToggleInfoPanel();
+                                    break;
+                                case ETrackedControllerRole.RightHand:
+                                    ToggleHiddenMesh();
+                                    break;
+                            }
                         }
                         else if (state.rAxis0.x < 0 && Math.Abs(state.rAxis0.y) < Math.Abs(state.rAxis0.x))
                         {
@@ -933,9 +1007,9 @@ namespace Undistort
 
             for (int i = 0; i < 3; i++)
             {
-                if (i == 0 && !RenderFlags.HasFlag(RenderFlag.Red)) continue;
-                if (i == 1 && !RenderFlags.HasFlag(RenderFlag.Green)) continue;
-                if (i == 2 && !RenderFlags.HasFlag(RenderFlag.Blue)) continue;
+                if (i == 0 && !RenderFlags.HasFlag(RenderFlag.RenderRed)) continue;
+                if (i == 1 && !RenderFlags.HasFlag(RenderFlag.RenderGreen)) continue;
+                if (i == 2 && !RenderFlags.HasFlag(RenderFlag.RenderBlue)) continue;
                 pixelShaderData.ActiveColor = i;
                 pixelShaderData.Controller = false;                                       
                 d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
@@ -984,7 +1058,7 @@ namespace Undistort
                 }
             }
 
-            if (RenderHiddenMesh && IsEyeActive(eye.Eye))
+            if (RenderHiddenMesh /*&& IsEyeActive(eye.Eye)*/)
             {
                 d3dDeviceContext.Rasterizer.State = pixelShaderData.Wireframe ? ncWireFrameRasterizerState : ncRasterizerState;
                 //render hidden mesh area just for control distortion area
