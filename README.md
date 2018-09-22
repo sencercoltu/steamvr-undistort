@@ -18,29 +18,29 @@ SteamVR lens distortion adjustment utility
 Purpose is to find optimal values for the lens coefficients and intrinsics in the JSON file, after replacing the original frensel lenses with GearVR or other lenses.
 
 The JSON file is read to file LH_Config_In.json via the lighthouse console at startup automatically.
-Adjusted values are saved to LH_Config_Out.json file. (No auto update to device because it's unsafe, you can loose your original config. Manually update after backing up original config!) 
+Adjusted values are saved to LH_Config_Out.json file on exit. (No auto update to device because it's unsafe, you can lose your original configuration. Manually update after backing up original config!) 
 
-Models are rendered three times for each color. (except center crosshair, hidden mesh, controllers and adjustment panel).
-The environment model path is hardcoded and points to the "environment" folder. Download any single .obj environment and put it in the environment folder and rename .obj and .mtl files to "environment".
+Environment model is rendered three times for each RGB color. (except center crosshair, hidden mesh, controllers and adjustment panel).
+The environment model path is hardcoded and points to the "environment" folder. Download any single .obj environment and put it in the "environment" folder and rename the .obj and .mtl files to "environment".
 
 Rendering is switchable between solid (textured) and wireframe (white). Lens distortion correction can be toggled, and you can see the result of the new values immediately.
 
-Distortion correction is done inside pixelshader. So the rendering, especially the adjustment panel rendering may be slow in some cases.
+Distortion correction is done inside the pixelshader. Therefore the rendering, especially the adjustment panel rendering may be slow in some cases.
 
-Adjustment is done witg two controllers:
+Adjustment is done with two motion controllers. Here are the mappings for the Vive:
 
 ### Left Controller
 #### Application Button: Toggle between compositor lens correction and pixelshader lens correction.
 #### TouchPad UP/DOWN Buttons: Move among menu items.
 #### TouchPad MIDDLE: Hide/Show adjustment panel.
-#### Grip: Toggle left eye modification flag.
+#### Grip: Toggle left eye adjustment flag.
 #### Trigger: Link/Unlink adjustment of values, or select action.
 
 ### Right Controller
 #### Application Button: Toggle between wireframe and texturd rendering.
 #### TouchPad LEFT/RIGHT Buttons: Decrease/Increase adjustment step.
 #### TouchPad MIDDLE: Hide/Show hidden mesh.
-#### Grip: Toggle right eye modification flag.
+#### Grip: Toggle right eye adjustment flag.
 #### Trigger: Hold to show original unadjusted values. Also enables/disables rendering of selected color channels. 
 
 
