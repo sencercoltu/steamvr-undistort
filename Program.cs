@@ -1,4 +1,5 @@
-﻿using SharpDX;
+﻿using FastJsonLib;
+using SharpDX;
 using SharpDX.D3DCompiler;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
@@ -13,7 +14,6 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Valve.VR;
 
@@ -95,6 +95,7 @@ namespace Undistort
         private static RasterizerState ncRasterizerState;
 
         public static DepthStencilState DepthStencilState;
+        public static DepthStencilState ControllerDepthStencilState;
 
         private static BlendState blendState;
         private static SamplerState samplerState;
@@ -107,8 +108,7 @@ namespace Undistort
 
         private static Shader hmaShader;
         private static VertexBufferBinding hmaVertexBufferBinding;
-
-        private static JavaScriptSerializer javaScriptSerializer = new JavaScriptSerializer();
+                
         private static IDictionary<string, object> lightHouseConfigJson;
 
         private static VertexShaderData vertexShaderData = default(VertexShaderData);
@@ -152,6 +152,11 @@ namespace Undistort
             public Texture2D DepthTexture;
             public DepthStencilView DepthStencilView;
             public DistortShaderData DistortionData;
+            public DistortShaderData OriginalDistortionData;
+            public DistortShaderData GetData(bool original)
+            {
+                return original ? OriginalDistortionData : DistortionData;
+            }
             public SharpDX.Direct3D11.Buffer BackBufferVertexBuffer;
 
             public string EyeName
@@ -188,7 +193,7 @@ namespace Undistort
                 DistortionData.Intrinsics.M23 = DistortionData.EyeCenter.Y;
             }
 
-            public void GetFocusCenterAspect()
+            public void CalcFocusCenterAspect()
             {
                 DistortionData.FocalX = Width / 2 * DistortionData.Intrinsics.M11;
                 DistortionData.FocalY = Height / 2 * DistortionData.Intrinsics.M22;
@@ -243,7 +248,7 @@ namespace Undistort
             K3 = 1 << 7,
             RenderRed = 1 << 8,
             RenderGreen = 1 << 9,
-            RenderBlue = 1 << 10,
+            RenderBlue = 1 << 10,            
             ALL = RedActive | GreenActive | BlueActive | Left | Right | K1 | K2 | K3 | RenderRed | RenderGreen | RenderBlue
         }
 
@@ -259,7 +264,7 @@ namespace Undistort
             for (int i = 0; i < length; i++)
             {
                 IntPtr ins = new IntPtr(unmanagedArray.ToInt64() + i * size);
-                mangagedArray[i] = Marshal.PtrToStructure<T>(ins);
+                mangagedArray[i] = (T) Marshal.PtrToStructure(ins, typeof(T));
             }
         }
 
@@ -326,7 +331,7 @@ namespace Undistort
                 using (var factory = new Factory4())
                 {
                     form.StartPosition = FormStartPosition.CenterScreen;
-                    form.Text = "SteamVR Coefficient Utility";
+                    form.Text = "SteamVR Lens Adjustment Utility";
                     form.ClientSize = WindowSize;
                     form.FormBorderStyle = FormBorderStyle.FixedSingle;
                     form.MinimizeBox = false;
@@ -526,8 +531,9 @@ namespace Undistort
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\928165436\spacecpod\spacecpod.obj";
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\716774474\VertigoRoom\VertigoRoom.obj";
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\686754013\holochamber\holochamber.obj";
-                    var fileName = ovrPath + @"..\..\workshop\content\250820\717646476\TheCube\TheCube.obj";
-                    
+                    //var fileName = ovrPath + @"..\..\workshop\content\250820\717646476\TheCube\TheCube.obj";
+                    var fileName = @"environment\environment.obj";
+
 
                     environmentModel = modelLoader.Load(fileName);
                     environmentModel.SetInputLayout(d3dDevice, ShaderSignature.GetInputSignature(environmentShader.vertexShaderByteCode));
@@ -585,6 +591,8 @@ namespace Undistort
                     depthStateDescription.IsDepthEnabled = true;
                     depthStateDescription.IsStencilEnabled = false;
                     DepthStencilState = new DepthStencilState(d3dDevice, depthStateDescription);
+                    depthStateDescription.DepthComparison = Comparison.Less;
+                    ControllerDepthStencilState = new DepthStencilState(d3dDevice, depthStateDescription);
 
                     var samplerStateDescription = SamplerStateDescription.Default();
 
@@ -606,7 +614,7 @@ namespace Undistort
                     d3dDeviceContext.PixelShader.SetConstantBuffer(1, pixelConstantBuffer);
                     d3dDeviceContext.PixelShader.SetConstantBuffer(2, coefficientConstantBuffer);
 
-                    InfoBoardModel.Init(d3dDevice); 
+                    AdjustmentPanelModel.Init(d3dDevice); 
                     CrossHairModel.Init(d3dDevice);
                     CrossHairModel.MoveCenter(0, 0, 0, 0);
 
@@ -668,11 +676,22 @@ namespace Undistort
                                     form.Close();
                                     break;
                                 case EVREventType.VREvent_ButtonPress:
-                                    var role = vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex);
-                                    var button = vrEvent.data.controller.button;
-                                    var state = default(VRControllerState_t);
-                                    vrSystem.GetControllerState(vrEvent.trackedDeviceIndex, ref state, (uint)Utilities.SizeOf<VRControllerState_t>());
-                                    ButtonPressed(role, ref state, (EVRButtonId)vrEvent.data.controller.button);
+                                    {
+                                        var role = vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex);
+                                        var button = vrEvent.data.controller.button;
+                                        var state = default(VRControllerState_t);
+                                        vrSystem.GetControllerState(vrEvent.trackedDeviceIndex, ref state, (uint)Utilities.SizeOf<VRControllerState_t>());
+                                        ButtonPressed(role, ref state, (EVRButtonId)vrEvent.data.controller.button);
+                                    }
+                                    break;
+                                case EVREventType.VREvent_ButtonUnpress:
+                                    {
+                                        var role = vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex);
+                                        var button = vrEvent.data.controller.button;
+                                        var state = default(VRControllerState_t);
+                                        vrSystem.GetControllerState(vrEvent.trackedDeviceIndex, ref state, (uint)Utilities.SizeOf<VRControllerState_t>());
+                                        ButtonUnPressed(role, ref state, (EVRButtonId)vrEvent.data.controller.button);
+                                    }
                                     break;
                                 default:
                                     //System.Diagnostics.Debug.WriteLine((EVREventType)vrEvent.eventType);
@@ -769,8 +788,8 @@ namespace Undistort
 
         public static void ResetEyes()
         {
-            if (RenderFlags.HasFlag(RenderFlag.Left)) { leftEye.ResetDistortionCoefficients(); leftEye.ResetEyeCenters(); }
-            if (RenderFlags.HasFlag(RenderFlag.Right)) { rightEye.ResetDistortionCoefficients(); rightEye.ResetEyeCenters(); }
+            if (RenderFlags.HasFlag(RenderFlag.Left)) { leftEye.ResetDistortionCoefficients(); leftEye.ResetEyeCenters(); leftEye.CalcFocusCenterAspect(); }
+            if (RenderFlags.HasFlag(RenderFlag.Right)) { rightEye.ResetDistortionCoefficients(); rightEye.ResetEyeCenters(); leftEye.CalcFocusCenterAspect(); }
 
         }
 
@@ -862,6 +881,19 @@ namespace Undistort
             }
         }
 
+        public static void ResetActiveValues()
+        {
+            if (RenderFlags.HasFlag(RenderFlag.Left))
+            {
+                leftEye.DistortionData = leftEye.OriginalDistortionData;
+                leftEye.CalcFocusCenterAspect();
+            }
+            if (RenderFlags.HasFlag(RenderFlag.Right))
+            {
+                rightEye.DistortionData = rightEye.OriginalDistortionData;
+                rightEye.CalcFocusCenterAspect();
+            }
+        }
 
         public static void AdjustCutoff(float adjustStep)
         {
@@ -907,7 +939,7 @@ namespace Undistort
             {
                 case EVRButtonId.k_EButton_Grip: //grip
                     {
-                        InfoBoardModel.ButtonPressed("G", role);
+                        AdjustmentPanelModel.ButtonPressed("G", role);
                         break;
                     }
                 case EVRButtonId.k_EButton_ApplicationMenu: //grip
@@ -924,7 +956,7 @@ namespace Undistort
                         break;
                     }
                 case EVRButtonId.k_EButton_SteamVR_Trigger:
-                    InfoBoardModel.ButtonPressed("T", role);
+                    AdjustmentPanelModel.ButtonPressed("T", role);
                     break;
                 case EVRButtonId.k_EButton_SteamVR_Touchpad:
                     {
@@ -944,22 +976,66 @@ namespace Undistort
                         else if (state.rAxis0.x < 0 && Math.Abs(state.rAxis0.y) < Math.Abs(state.rAxis0.x))
                         {
                             //left
-                            InfoBoardModel.ButtonPressed("L", role);
+                            AdjustmentPanelModel.ButtonPressed("L", role);
                         }
                         else if (state.rAxis0.x > 0 && Math.Abs(state.rAxis0.y) < Math.Abs(state.rAxis0.x))
                         {
                             //right
-                            InfoBoardModel.ButtonPressed("R", role);
+                            AdjustmentPanelModel.ButtonPressed("R", role);
                         }
                         else if (state.rAxis0.y > 0 && Math.Abs(state.rAxis0.x) < Math.Abs(state.rAxis0.y))
                         {
                             //up
-                            InfoBoardModel.ButtonPressed("U", role);
+                            AdjustmentPanelModel.ButtonPressed("U", role);
                         }
                         else if (state.rAxis0.y < 0 && Math.Abs(state.rAxis0.x) < Math.Abs(state.rAxis0.y))
                         {
                             //down
-                            InfoBoardModel.ButtonPressed("D", role);
+                            AdjustmentPanelModel.ButtonPressed("D", role);
+                        }
+                    }
+                    break;
+            }
+
+        }
+
+        private static void ButtonUnPressed(ETrackedControllerRole role, ref VRControllerState_t state, EVRButtonId button)
+        {
+            switch (button)
+            {
+                case EVRButtonId.k_EButton_Grip: //grip
+                    {
+                        AdjustmentPanelModel.ButtonUnPressed("G", role);
+                        break;
+                    }
+                case EVRButtonId.k_EButton_SteamVR_Trigger:
+                    AdjustmentPanelModel.ButtonUnPressed("T", role);
+                    break;
+                case EVRButtonId.k_EButton_SteamVR_Touchpad:
+                    {
+                        if (state.rAxis0.x > -0.3 && state.rAxis0.x < 0.3 && state.rAxis0.y > -0.3 && state.rAxis0.y < 0.3)
+                        {
+                            //center pressed
+                        }
+                        else if (state.rAxis0.x < 0 && Math.Abs(state.rAxis0.y) < Math.Abs(state.rAxis0.x))
+                        {
+                            //left
+                            AdjustmentPanelModel.ButtonUnPressed("L", role);
+                        }
+                        else if (state.rAxis0.x > 0 && Math.Abs(state.rAxis0.y) < Math.Abs(state.rAxis0.x))
+                        {
+                            //right
+                            AdjustmentPanelModel.ButtonUnPressed("R", role);
+                        }
+                        else if (state.rAxis0.y > 0 && Math.Abs(state.rAxis0.x) < Math.Abs(state.rAxis0.y))
+                        {
+                            //up
+                            AdjustmentPanelModel.ButtonUnPressed("U", role);
+                        }
+                        else if (state.rAxis0.y < 0 && Math.Abs(state.rAxis0.x) < Math.Abs(state.rAxis0.y))
+                        {
+                            //down
+                            AdjustmentPanelModel.ButtonUnPressed("D", role);
                         }
                     }
                     break;
@@ -969,7 +1045,7 @@ namespace Undistort
 
         private static void ToggleInfoPanel()
         {
-            InfoBoardModel.Show = !InfoBoardModel.Show;
+            AdjustmentPanelModel.Show = !AdjustmentPanelModel.Show;
         }
 
         public static bool IsEyeActive(EVREye eye)
@@ -1033,6 +1109,7 @@ namespace Undistort
             d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
 
             d3dDeviceContext.OutputMerger.SetBlendState(null);
+            d3dDeviceContext.OutputMerger.SetDepthStencilState(ControllerDepthStencilState);
             Matrix controllerMat = default(Matrix);
             foreach (var controllerId in controllerIDs)
             {
@@ -1053,8 +1130,8 @@ namespace Undistort
                     controllerModel.Render(d3dDeviceContext);
 
                     //attach panel to left controller
-                    if (InfoBoardModel.Show && controllerRole == ETrackedControllerRole.LeftHand)
-                        InfoBoardModel.Render(d3dDeviceContext);
+                    if (AdjustmentPanelModel.Show && controllerRole == ETrackedControllerRole.LeftHand)
+                        AdjustmentPanelModel.Render(d3dDeviceContext);
                 }
             }
 
@@ -1199,60 +1276,59 @@ namespace Undistort
             SaveEyeSettings(leftEye);
             SaveEyeSettings(rightEye); 
 
-            var jsonData = javaScriptSerializer.Serialize(lightHouseConfigJson);
-            var formatter = new JsonFormatter(jsonData);
-            File.WriteAllText(confPath, formatter.Format());
+            var jsonData = FastJson.Serialize(lightHouseConfigJson);            
+            File.WriteAllText(confPath, jsonData.Prettify());
         }
 
         private static void SaveEyeSettings(EyeData eye)
         {
-            eye.Json["grow_for_undistort"] = eye.DistortionData.GrowToUndistort;
-            eye.Json["undistort_r2_cutoff"] = eye.DistortionData.UndistortR2Cutoff;
+            eye.Json["grow_for_undistort"] = (double)eye.DistortionData.GrowToUndistort;
+            eye.Json["undistort_r2_cutoff"] = (double)eye.DistortionData.UndistortR2Cutoff;
 
-            (eye.Json["distortion"] as Dictionary<string, object>)["center_x"] = eye.DistortionData.GreenCenter.X;
-            (eye.Json["distortion"] as Dictionary<string, object>)["center_y"] = eye.DistortionData.GreenCenter.Y;
-            (eye.Json["distortion_blue"] as Dictionary<string, object>)["center_x"] = eye.DistortionData.BlueCenter.X;
-            (eye.Json["distortion_blue"] as Dictionary<string, object>)["center_y"] = eye.DistortionData.BlueCenter.Y;
-            (eye.Json["distortion_red"] as Dictionary<string, object>)["center_x"] = eye.DistortionData.RedCenter.X;
-            (eye.Json["distortion_red"] as Dictionary<string, object>)["center_y"] = eye.DistortionData.RedCenter.Y;
+            (eye.Json["distortion"] as Dictionary<string, object>)["center_x"] = (double)eye.DistortionData.GreenCenter.X;
+            (eye.Json["distortion"] as Dictionary<string, object>)["center_y"] = (double)eye.DistortionData.GreenCenter.Y;
+            (eye.Json["distortion_blue"] as Dictionary<string, object>)["center_x"] = (double)eye.DistortionData.BlueCenter.X;
+            (eye.Json["distortion_blue"] as Dictionary<string, object>)["center_y"] = (double)eye.DistortionData.BlueCenter.Y;
+            (eye.Json["distortion_red"] as Dictionary<string, object>)["center_x"] = (double)eye.DistortionData.RedCenter.X;
+            (eye.Json["distortion_red"] as Dictionary<string, object>)["center_y"] = (double)eye.DistortionData.RedCenter.Y;
 
             var g = ((eye.Json["distortion"] as Dictionary<string, object>)["coeffs"] as object[]);
-            g[0] = eye.DistortionData.GreenCoeffs.X; g[1] = eye.DistortionData.GreenCoeffs.Y; g[2] = eye.DistortionData.GreenCoeffs.Z;
+            g[0] = (double)eye.DistortionData.GreenCoeffs.X; g[1] = (double)eye.DistortionData.GreenCoeffs.Y; g[2] = (double)eye.DistortionData.GreenCoeffs.Z;
             var b = ((eye.Json["distortion_blue"] as Dictionary<string, object>)["coeffs"] as object[]);
-            b[0] = eye.DistortionData.BlueCoeffs.X; b[1] = eye.DistortionData.BlueCoeffs.Y; b[2] = eye.DistortionData.BlueCoeffs.Z;
+            b[0] = (double)eye.DistortionData.BlueCoeffs.X; b[1] = (double)eye.DistortionData.BlueCoeffs.Y; b[2] = (double)eye.DistortionData.BlueCoeffs.Z;
             var r = ((eye.Json["distortion_red"] as Dictionary<string, object>)["coeffs"] as object[]);
-            r[0] = eye.DistortionData.RedCoeffs.X; r[1] = eye.DistortionData.RedCoeffs.Y; r[2] = eye.DistortionData.RedCoeffs.Z;
+            r[0] = (double)eye.DistortionData.RedCoeffs.X; r[1] = (double)eye.DistortionData.RedCoeffs.Y; r[2] = (double)eye.DistortionData.RedCoeffs.Z;
 
             var row = eye.Json["intrinsics"] as object[];
             var col = row[0] as object[];            
-            col[0] = eye.DistortionData.Intrinsics.M11;
-            col[1] = eye.DistortionData.Intrinsics.M21;
-            col[2] = eye.DistortionData.Intrinsics.M31;
+            col[0] = (double)eye.DistortionData.Intrinsics.M11;
+            col[1] = (double)eye.DistortionData.Intrinsics.M21;
+            col[2] = (double)eye.DistortionData.Intrinsics.M31;
             col = row[1] as object[];                 
-            col[0] = eye.DistortionData.Intrinsics.M12;
-            col[1] = eye.DistortionData.Intrinsics.M22;
-            col[2] = eye.DistortionData.Intrinsics.M32;
+            col[0] = (double)eye.DistortionData.Intrinsics.M12;
+            col[1] = (double)eye.DistortionData.Intrinsics.M22;
+            col[2] = (double)eye.DistortionData.Intrinsics.M32;
             col = row[2] as object[];                 
-            col[0] = eye.DistortionData.Intrinsics.M13;
-            col[1] = eye.DistortionData.Intrinsics.M23;
-            col[2] = eye.DistortionData.Intrinsics.M33;
+            col[0] = (double)eye.DistortionData.Intrinsics.M13;
+            col[1] = (double)eye.DistortionData.Intrinsics.M23;
+            col[2] = (double)eye.DistortionData.Intrinsics.M33;
 
             row = eye.Json["extrinsics"] as object[];
             col = row[0] as object[];            
-            col[0] = eye.DistortionData.Extrinsics.M11;
-            col[1] = eye.DistortionData.Extrinsics.M21;
-            col[2] = eye.DistortionData.Extrinsics.M31;
-            col[3] = eye.DistortionData.Extrinsics.M41;
+            col[0] = (double)eye.DistortionData.Extrinsics.M11;
+            col[1] = (double)eye.DistortionData.Extrinsics.M21;
+            col[2] = (double)eye.DistortionData.Extrinsics.M31;
+            col[3] = (double)eye.DistortionData.Extrinsics.M41;
             col = row[1] as object[];
-            col[0] = eye.DistortionData.Extrinsics.M12;
-            col[1] = eye.DistortionData.Extrinsics.M22;
-            col[2] = eye.DistortionData.Extrinsics.M32;
-            col[3] = eye.DistortionData.Extrinsics.M42;
+            col[0] = (double)eye.DistortionData.Extrinsics.M12;
+            col[1] = (double)eye.DistortionData.Extrinsics.M22;
+            col[2] = (double)eye.DistortionData.Extrinsics.M32;
+            col[3] = (double)eye.DistortionData.Extrinsics.M42;
             col = row[2] as object[];
-            col[0] = eye.DistortionData.Extrinsics.M13;
-            col[1] = eye.DistortionData.Extrinsics.M23;
-            col[2] = eye.DistortionData.Extrinsics.M33;
-            col[3] = eye.DistortionData.Extrinsics.M43;
+            col[0] = (double)eye.DistortionData.Extrinsics.M13;
+            col[1] = (double)eye.DistortionData.Extrinsics.M23;
+            col[2] = (double)eye.DistortionData.Extrinsics.M33;
+            col[3] = (double)eye.DistortionData.Extrinsics.M43;
         }
 
         private static void LoadLHSettings(string ovrPath)
@@ -1270,10 +1346,9 @@ namespace Undistort
             var process = Process.Start(processInfo);
             process.WaitForExit();
 
-            var jsonData = File.ReadAllText(confPath);
-            var formatter = new JsonFormatter(jsonData);
-            File.WriteAllText(confPath, formatter.Format());
-            lightHouseConfigJson = javaScriptSerializer.Deserialize<IDictionary<string, object>>(jsonData);
+            var jsonData = File.ReadAllText(confPath);            
+            File.WriteAllText(confPath, jsonData.Prettify());
+            lightHouseConfigJson = FastJson.Deserialize<IDictionary<string, object>>(jsonData);
 
             var transforms = lightHouseConfigJson["tracking_to_eye_transform"] as object[];
             leftEye.Json = (transforms[0]) as IDictionary<string, object>;
@@ -1338,7 +1413,11 @@ namespace Undistort
             eye.DistortionData.Extrinsics.M43 = (float)System.Convert.ToDouble(col[3]);
             eye.DistortionData.Extrinsics.M44 = 1;
 
-            eye.GetFocusCenterAspect();
+
+
+            eye.CalcFocusCenterAspect();
+
+            eye.OriginalDistortionData = eye.DistortionData;
         }
     }
 }
