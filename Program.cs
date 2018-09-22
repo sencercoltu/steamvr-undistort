@@ -546,24 +546,7 @@ namespace Undistort
                     controllerModel = modelLoader.Load(fileName);
                     controllerModel.SetInputLayout(d3dDevice, ShaderSignature.GetInputSignature(environmentShader.vertexShaderByteCode));
 
-                    for (uint cdevice = 0; cdevice < maxTrackedDeviceCount; cdevice++)
-                    {
-                        var deviceClass = vrSystem.GetTrackedDeviceClass(cdevice);
-
-                        switch (deviceClass)
-                        {
-                            case ETrackedDeviceClass.HMD:
-                                hmdID = cdevice;
-                                break;
-                            case ETrackedDeviceClass.Controller:
-                                if (!controllers.ContainsKey(cdevice))
-                                {
-                                    controllers.Add(cdevice, vrSystem.GetControllerRoleForTrackedDeviceIndex(cdevice));
-                                    controllerIDs = controllers.Keys.ToArray();
-                                }
-                                break;
-                        }
-                    }
+                    QueryDevices();
 
                     vertexConstantBuffer = new SharpDX.Direct3D11.Buffer(d3dDevice, Utilities.SizeOf<VertexShaderData>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
                     pixelConstantBuffer = new SharpDX.Direct3D11.Buffer(d3dDevice, Utilities.SizeOf<PixelShaderData>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
@@ -658,17 +641,37 @@ namespace Undistort
                         {
                             switch ((EVREventType)vrEvent.eventType)
                             {
-                                case EVREventType.VREvent_TrackedDeviceRoleChanged:
+                                case EVREventType.VREvent_PropertyChanged:
+                                    {
+                                        QueryDevices();
+                                    }
+                                    break;
+
                                 case EVREventType.VREvent_TrackedDeviceUpdated:
-                                    controllers.Remove(vrEvent.trackedDeviceIndex);
-                                    controllers.Add(vrEvent.trackedDeviceIndex, vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex));
+                                    {                                        
+                                        QueryDevices();
+
+                                    }
+                                    break;
+                                case EVREventType.VREvent_TrackedDeviceRoleChanged:                                
+                                    {
+                                        //controllers.Remove(vrEvent.trackedDeviceIndex);
+                                        QueryDevices();
+                                    }
                                     break;
                                 case EVREventType.VREvent_TrackedDeviceActivated:
-                                    if (!controllers.ContainsKey(vrEvent.trackedDeviceIndex))
-                                    {
-                                        controllers.Add(vrEvent.trackedDeviceIndex, vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex));
-                                        controllerIDs = controllers.Keys.ToArray();
-                                    }
+                                    QueryDevices();
+                                    //if (!controllers.ContainsKey(vrEvent.trackedDeviceIndex))
+                                    //{
+                                    //    //var pError = ETrackedPropertyError.TrackedProp_Success;
+                                    //    //var newrole = (ETrackedControllerRole)vrSystem.GetInt32TrackedDeviceProperty(vrEvent.trackedDeviceIndex, ETrackedDeviceProperty.Prop_ControllerRoleHint_Int32, ref pError);
+                                    //    var newrole = vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex);
+                                    //    if (newrole == ETrackedControllerRole.LeftHand || newrole == ETrackedControllerRole.RightHand)
+                                    //    {
+                                    //        controllers.Add(vrEvent.trackedDeviceIndex, vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex));
+                                    //        controllerIDs = controllers.Keys.ToArray();
+                                    //    }
+                                    //}
                                     break;
 
                                 case EVREventType.VREvent_TrackedDeviceDeactivated:
@@ -726,6 +729,35 @@ namespace Undistort
                 }
             }
 
+        }
+
+        private static void QueryDevices()
+        {
+            controllers.Clear();
+            for (uint cdevice = 0; cdevice < maxTrackedDeviceCount; cdevice++)
+            {
+                var deviceClass = vrSystem.GetTrackedDeviceClass(cdevice);
+
+                switch (deviceClass)
+                {
+                    case ETrackedDeviceClass.HMD:
+                        hmdID = cdevice;
+                        break;
+                    case ETrackedDeviceClass.Controller:
+                        if (!controllers.ContainsKey(cdevice))
+                        {
+                            //var pError = ETrackedPropertyError.TrackedProp_Success;
+                            //var newrole = (ETrackedControllerRole) vrSystem.GetInt32TrackedDeviceProperty(cdevice, ETrackedDeviceProperty.Prop_ControllerRoleHint_Int32, ref pError);
+                            var newrole = vrSystem.GetControllerRoleForTrackedDeviceIndex(cdevice);
+                            if (newrole == ETrackedControllerRole.LeftHand || newrole == ETrackedControllerRole.RightHand)
+                            {
+                                controllers.Add(cdevice, newrole);
+                                controllerIDs = controllers.Keys.ToArray();
+                            }
+                        }
+                        break;
+                }
+            }
         }
 
         private static void CurrentDomain_FirstChanceException(object sender, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs e)
