@@ -14,7 +14,7 @@ using static Undistort.Program;
 
 namespace Undistort
 {
-    public static class InfoBoardModel
+    public static class AdjustmentPanelModel
     {
         private static float[] vertices;
         private static SharpDX.Direct3D11.Buffer vertexBuffer;
@@ -27,9 +27,8 @@ namespace Undistort
 
         private static RenderTarget textRenderTarget;
         private static TextFormat textFormat;
-        private static TextFormat headerTextFormat;
-        private static SolidColorBrush blackBrush;
-        private static SolidColorBrush checkedItemBrush;
+        //private static TextFormat headerTextFormat;
+        private static SolidColorBrush blackBrush;        
         private static SolidColorBrush selectedItemBrush;
 
         //private static EyeData eye;
@@ -49,7 +48,8 @@ namespace Undistort
             public Action OnToggle;
             public Func<bool> IsActive;
             public Func<bool> IsColorVisible;
-            public Action<string> OnButton;
+            public Action<string> OnButtonPressed;
+            public Action<string> OnButtonUnPressed;
             public void Draw(RenderTarget textRenderTarget)
             {
                 foreach (var point in Icons)
@@ -88,13 +88,12 @@ namespace Undistort
                 TextArea.Left += 5;
                 TextArea.Right -= 5;
             }
-
             public void Draw(RenderTarget textRenderTarget, TextFormat textFormat, SolidColorBrush brush)
             {
                 var text = GetText();
                 if (!string.IsNullOrEmpty(text))
                 {
-                    textRenderTarget.FillRectangle(TextArea, Row.BackBrush);
+                    textRenderTarget.FillRectangle(TextArea, (Row.ActionGroup == SelectedCell.Row.ActionGroup) ? selectedItemBrush : Row.BackBrush);
                     textRenderTarget.DrawText(text, textFormat, TextArea, brush);
                 }
             }
@@ -126,9 +125,6 @@ namespace Undistort
             {
                 foreach (var column in Columns)
                     column.Draw(textRenderTarget, textFormat, brush);
-                if (IsFocused)
-                    textRenderTarget.DrawRectangle(SelectionRect, selectedItemBrush, 3f);
-
             }
         };
 
@@ -143,6 +139,8 @@ namespace Undistort
 
         private static Dictionary<string, MenuCell> CellMap = new Dictionary<string, MenuCell>();
 
+        private static bool ShowOriginalValue = false;
+
         private static void InitTable()
         {
             Actions.Add("LEFT", new ActionGroup
@@ -153,7 +151,7 @@ namespace Undistort
                 {
                     new IconArea { Location = new PointF { X = 140, Y = 5 } }
                 },
-                OnButton = (b) => { }
+                OnButtonPressed = (b) => { }
             });
             Actions.Add("RIGHT", new ActionGroup
             {
@@ -163,13 +161,30 @@ namespace Undistort
                 {
                     new IconArea { Location = new PointF { X = 310, Y = 5 } }
                 },
-                OnButton = (b) => { }
+                OnButtonPressed = (b) => { }
             });
-            Actions.Add("ECENTER", new ActionGroup
+            Actions.Add("ECENTERX", new ActionGroup
             {
                 OnToggle = () => { },
                 IsActive = () => { return true; },
-                OnButton = (b) =>
+                OnButtonPressed = (b) =>
+                {
+                    switch (b)
+                    {
+                        case "U":
+                            AdjustEyeCenters(AdjustStep, 0);
+                            break;
+                        case "D":
+                            AdjustEyeCenters(-AdjustStep, 0);
+                            break;
+                    }
+                },
+            });
+            Actions.Add("ECENTERY", new ActionGroup
+            {
+                OnToggle = () => { },
+                IsActive = () => { return true; },
+                OnButtonPressed = (b) =>
                 {
                     switch (b)
                     {
@@ -179,20 +194,31 @@ namespace Undistort
                         case "D":
                             AdjustEyeCenters(0, -AdjustStep);
                             break;
-                        case "L":
-                            AdjustEyeCenters(-AdjustStep, 0);
+                    }
+                },
+            });
+            Actions.Add("FOCALX", new ActionGroup
+            {
+                OnToggle = () => { },
+                IsActive = () => { return true; },
+                OnButtonPressed = (b) =>
+                {
+                    switch (b)
+                    {
+                        case "D":
+                            AdjustFocus(-AdjustStep, 0);
                             break;
-                        case "R":
-                            AdjustEyeCenters(AdjustStep, 0);
+                        case "U":
+                            AdjustFocus(AdjustStep, 0);
                             break;
                     }
                 },
             });
-            Actions.Add("FOCAL", new ActionGroup
+            Actions.Add("FOCALY", new ActionGroup
             {
                 OnToggle = () => { },
                 IsActive = () => { return true; },
-                OnButton = (b) =>
+                OnButtonPressed = (b) =>
                 {
                     switch (b)
                     {
@@ -202,12 +228,6 @@ namespace Undistort
                         case "D":
                             AdjustFocus(0, -AdjustStep);
                             break;
-                        case "L":
-                            AdjustFocus(-AdjustStep, 0);
-                            break;
-                        case "R":
-                            AdjustFocus(AdjustStep, 0);
-                            break;
                     }
                 },
             });
@@ -215,7 +235,7 @@ namespace Undistort
             {
                 OnToggle = () => { },
                 IsActive = () => { return true; },
-                OnButton = (b) =>
+                OnButtonPressed = (b) =>
                 {
                     switch (b)
                     {
@@ -232,7 +252,7 @@ namespace Undistort
             {
                 OnToggle = () => { },
                 IsActive = () => { return true; },
-                OnButton = (b) =>
+                OnButtonPressed = (b) =>
                 {
                     switch (b)
                     {
@@ -245,11 +265,28 @@ namespace Undistort
                     }
                 },
             });
-            Actions.Add("CCENTER", new ActionGroup
+            Actions.Add("CCENTERX", new ActionGroup
             {
                 OnToggle = () => { },
                 IsActive = () => { return true; },
-                OnButton = (b) =>
+                OnButtonPressed = (b) =>
+                {
+                    switch (b)
+                    {
+                        case "U":
+                            AdjustColorCenters(AdjustStep, 0);
+                            break;
+                        case "D":
+                            AdjustColorCenters(-AdjustStep, 0);
+                            break;
+                    }
+                },
+            });
+            Actions.Add("CCENTERY", new ActionGroup
+            {
+                OnToggle = () => { },
+                IsActive = () => { return true; },
+                OnButtonPressed = (b) =>
                 {
                     switch (b)
                     {
@@ -258,12 +295,6 @@ namespace Undistort
                             break;
                         case "D":
                             AdjustColorCenters(0, -AdjustStep);
-                            break;
-                        case "L":
-                            AdjustColorCenters(-AdjustStep, 0);
-                            break;
-                        case "R":
-                            AdjustColorCenters(AdjustStep, 0);
                             break;
                     }
                 },
@@ -278,7 +309,7 @@ namespace Undistort
                 },
                 OnToggle = () => { RenderFlags ^= RenderFlag.K1; },
                 IsActive = () => { return RenderFlags.HasFlag(RenderFlag.K1); },
-                OnButton = (b) =>
+                OnButtonPressed = (b) =>
                 {
                     switch (b)
                     {
@@ -301,7 +332,7 @@ namespace Undistort
                 },
                 OnToggle = () => { RenderFlags ^= RenderFlag.K2; },
                 IsActive = () => { return RenderFlags.HasFlag(RenderFlag.K2); },
-                OnButton = (b) =>
+                OnButtonPressed = (b) =>
                 {
                     switch (b)
                     {
@@ -324,7 +355,7 @@ namespace Undistort
                 },
                 OnToggle = () => { RenderFlags ^= RenderFlag.K3; },
                 IsActive = () => { return RenderFlags.HasFlag(RenderFlag.K3); },
-                OnButton = (b) =>
+                OnButtonPressed = (b) =>
                 {
                     switch (b)
                     {
@@ -337,34 +368,18 @@ namespace Undistort
                     }
                 },
             });
-            Actions.Add("ADJ", new ActionGroup
-            {
-                IsActive = () => { return true; },
-                OnButton = (b) =>
-                {
-                    switch (b)
-                    {
-                        case "L":
-                            IncreaseAdjustStep();
-                            break;
-                        case "R":
-                            DecreaseAdjustStep();
-                            break;
-                    }
-                },
-            });
             Actions.Add("RED", new ActionGroup
             {
                 IsColorVisible = () => { return RenderFlags.HasFlag(RenderFlag.RenderRed); },
                 Icons =
                 {
-                    new IconArea { Location = new PointF { X = 220, Y = 208 } },
-                    new IconArea { Location = new PointF { X = 330, Y = 208 } , Type = "V"}
+                    new IconArea { Location = new PointF { X = 150, Y = 208 } },
+                    new IconArea { Location = new PointF { X = 390, Y = 208 } , Type = "V"}
 
                 },
                 OnToggle = () => { RenderFlags ^= RenderFlag.RedActive; },
                 IsActive = () => { return RenderFlags.HasFlag(RenderFlag.RedActive); },
-                OnButton = (b) =>
+                OnButtonPressed = (b) =>
                 {
                     switch (b)
                     {
@@ -379,12 +394,12 @@ namespace Undistort
                 IsColorVisible = () => { return RenderFlags.HasFlag(RenderFlag.RenderGreen); },
                 Icons =
                 {
-                    new IconArea { Location = new PointF { X = 220, Y = 382 } },
-                    new IconArea { Location = new PointF { X = 330, Y = 382 } , Type = "V"}
+                    new IconArea { Location = new PointF { X = 150, Y = 382 } },
+                    new IconArea { Location = new PointF { X = 390, Y = 382 } , Type = "V"}
                 },
                 OnToggle = () => { RenderFlags ^= RenderFlag.GreenActive; },
                 IsActive = () => { return RenderFlags.HasFlag(RenderFlag.GreenActive); },
-                OnButton = (b) =>
+                OnButtonPressed = (b) =>
                 {
                     switch (b)
                     {
@@ -399,12 +414,12 @@ namespace Undistort
                 IsColorVisible = () => { return RenderFlags.HasFlag(RenderFlag.RenderBlue); },
                 Icons =
                 {
-                    new IconArea { Location = new PointF { X = 220, Y = 556 } },
-                    new IconArea { Location = new PointF { X = 330, Y = 556} , Type = "V"}
+                    new IconArea { Location = new PointF { X = 150, Y = 556 } },
+                    new IconArea { Location = new PointF { X = 390, Y = 556} , Type = "V"}
                 },
                 OnToggle = () => { RenderFlags ^= RenderFlag.BlueActive; },
                 IsActive = () => { return RenderFlags.HasFlag(RenderFlag.BlueActive); },
-                OnButton = (b) =>
+                OnButtonPressed = (b) =>
                 {
                     switch (b)
                     {
@@ -414,69 +429,80 @@ namespace Undistort
                     }
                 },
             });
-
+            Actions.Add("RESET", new ActionGroup
+            {
+                OnToggle = () => { ResetActiveValues(); },
+                IsActive = () => { return true; },
+                OnButtonPressed = (b) => { },
+            });
+            Actions.Add("SCRATCH", new ActionGroup
+            {
+                OnToggle = () => { ResetEyes(); },
+                IsActive = () => { return true; },
+                OnButtonPressed = (b) => { },
+            });
 
 
             int rowIndex = 0;
             MenuRows.AddRange(new[]
             {
-                new MenuRow(rowIndex, "ECENTER", 120) //centerx
+                new MenuRow(rowIndex, "ECENTERX", 120) //centerx
                 {
                     BackColor = new RawColor4(0.85f, 0.85f, 0.85f, 1),
                     Columns =
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.EyeCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).EyeCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.EyeCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).EyeCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
-                new MenuRow(++rowIndex, "ECENTER", 120) //centery
+                new MenuRow(++rowIndex, "ECENTERY", 120) //centery
                 {
                     BackColor = new RawColor4(0.85f, 0.85f, 0.85f, 1),
                     Columns =
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.EyeCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).EyeCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.EyeCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).EyeCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
-                new MenuRow(++rowIndex, "FOCAL", 120) //focalx
+                new MenuRow(++rowIndex, "FOCALX", 120) //focalx
                 {
                     BackColor = new RawColor4(0.85f, 0.85f, 0.85f, 1),
                     Columns =
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.FocalX.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).FocalX.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.FocalX.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).FocalX.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
-                new MenuRow(++rowIndex, "FOCAL", 120) //focaly
+                new MenuRow(++rowIndex, "FOCALY", 120) //focaly
                 {
                     BackColor = new RawColor4(0.85f, 0.85f, 0.85f, 1),
                     Columns =
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.FocalY.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).FocalY.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.FocalY.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).FocalY.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
@@ -487,11 +513,11 @@ namespace Undistort
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.GrowToUndistort.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).GrowToUndistort.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.GrowToUndistort.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).GrowToUndistort.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
@@ -502,11 +528,11 @@ namespace Undistort
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.UndistortR2Cutoff.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).UndistortR2Cutoff.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.UndistortR2Cutoff.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).UndistortR2Cutoff.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
@@ -521,33 +547,33 @@ namespace Undistort
                         }
                     }
                 },
-                new MenuRow(++rowIndex, "CCENTER", 120) //ccenterx
+                new MenuRow(++rowIndex, "CCENTERX", 120) //ccenterx
                 {
                     BackColor = new RawColor4(0.85f, 0.85f, 0.85f, 1),
                     Columns =
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.RedCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).RedCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.RedCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).RedCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                     }
                 },
-                new MenuRow(++rowIndex, "CCENTER", 120) //ccentery
+                new MenuRow(++rowIndex, "CCENTERY", 120) //ccentery
                 {
                     BackColor = new RawColor4(0.85f, 0.85f, 0.85f, 1),
                     Columns =
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.RedCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).RedCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.RedCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).RedCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                     }
                 },
@@ -558,11 +584,11 @@ namespace Undistort
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.RedCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).RedCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.RedCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).RedCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
@@ -573,11 +599,11 @@ namespace Undistort
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.RedCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).RedCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.RedCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).RedCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
@@ -588,11 +614,11 @@ namespace Undistort
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.RedCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).RedCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.RedCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).RedCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
@@ -607,33 +633,33 @@ namespace Undistort
                         }
                     }
                 },
-                new MenuRow(++rowIndex, "CCENTER", 120) //ccenterx
+                new MenuRow(++rowIndex, "CCENTERX", 120) //ccenterx
                 {
                     BackColor = new RawColor4(0.85f, 0.85f, 0.85f, 1),
                     Columns =
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.GreenCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).GreenCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.GreenCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).GreenCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                     }
                 },
-                new MenuRow(++rowIndex, "CCENTER", 120) //ccentery
+                new MenuRow(++rowIndex, "CCENTERY", 120) //ccentery
                 {
                     BackColor = new RawColor4(0.85f, 0.85f, 0.85f, 1),
                     Columns =
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.GreenCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).GreenCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.GreenCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).GreenCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                     }
                 },
@@ -644,11 +670,11 @@ namespace Undistort
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.GreenCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).GreenCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.GreenCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).GreenCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
@@ -659,11 +685,11 @@ namespace Undistort
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.GreenCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).GreenCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.GreenCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).GreenCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
@@ -674,11 +700,11 @@ namespace Undistort
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.GreenCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).GreenCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.GreenCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).GreenCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
@@ -693,33 +719,33 @@ namespace Undistort
                         }
                     }
                 },
-                new MenuRow(++rowIndex, "CCENTER", 120) //ccenterx
+                new MenuRow(++rowIndex, "CCENTERX", 120) //ccenterx
                 {
                     BackColor = new RawColor4(0.85f, 0.85f, 0.85f, 1),
                     Columns =
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.BlueCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).BlueCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.BlueCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).BlueCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                     }
                 },
-                new MenuRow(++rowIndex, "CCENTER", 120) //ccentery
+                new MenuRow(++rowIndex, "CCENTERY", 120) //ccentery
                 {
                     BackColor = new RawColor4(0.85f, 0.85f, 0.85f, 1),
                     Columns =
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.BlueCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).BlueCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.BlueCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).BlueCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                     }
                 },
@@ -730,11 +756,11 @@ namespace Undistort
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.BlueCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).BlueCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.BlueCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).BlueCoeffs.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
@@ -745,11 +771,11 @@ namespace Undistort
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.BlueCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).BlueCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.BlueCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).BlueCoeffs.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
                 },
@@ -760,11 +786,35 @@ namespace Undistort
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.DistortionData.BlueCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).BlueCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.DistortionData.BlueCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).BlueCoeffs.Z.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                        }
+                    }
+                },
+                new MenuRow(++rowIndex, "RESET", 120) //step
+                {
+                    BackColor = new RawColor4(0.97255f, 0.796078f, 0.678431f, 1),
+                    Columns =
+                    {
+                        new MenuCell(rowIndex, 120)
+                        {
+                            Checkable = false,
+                            GetText = () => { return null; }
+                        }
+                    }
+                },
+                new MenuRow(++rowIndex, "SCRATCH", 120) //step
+                {
+                    BackColor = new RawColor4(0.97255f, 0.796078f, 0.678431f, 1),
+                    Columns =
+                    {
+                        new MenuCell(rowIndex, 120)
+                        {
+                            Checkable = false,
+                            GetText = () => { return null; }
                         }
                     }
                 },
@@ -774,12 +824,12 @@ namespace Undistort
                     Columns =
                     {
                         new MenuCell(rowIndex, 120)
-                        {
-                            Checkable = false,
+                        {                                                        Checkable = false,
                             GetText = () => { return AdjustStep.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
-                }
+                },
+
             });
 
             foreach (var row in MenuRows)
@@ -906,41 +956,39 @@ namespace Undistort
             textFormat = new TextFormat(directWriteFactory, "Courier New", 15.0f);
             textFormat.ParagraphAlignment = ParagraphAlignment.Center;
             textFormat.TextAlignment = TextAlignment.Trailing;
-            headerTextFormat = new TextFormat(directWriteFactory, "Courier New", FontWeight.Bold, SharpDX.DirectWrite.FontStyle.Normal, 20.0f);
-            headerTextFormat.ParagraphAlignment = ParagraphAlignment.Center;
-            headerTextFormat.TextAlignment = TextAlignment.Leading;
-            blackBrush = new SolidColorBrush(textRenderTarget, SharpDX.Color4.Black);
-            checkedItemBrush = new SolidColorBrush(textRenderTarget, new SharpDX.Color4(0f, 1f, 0f, 1.0f));
-            selectedItemBrush = new SolidColorBrush(textRenderTarget, new SharpDX.Color4(1.0f, 1.0f, 0.0f, 1.0f));
+            //headerTextFormat = new TextFormat(directWriteFactory, "Courier New", FontWeight.Bold, SharpDX.DirectWrite.FontStyle.Normal, 20.0f);
+            //headerTextFormat.ParagraphAlignment = ParagraphAlignment.Center;
+            //headerTextFormat.TextAlignment = TextAlignment.Leading;
+            blackBrush = new SolidColorBrush(textRenderTarget, SharpDX.Color4.Black);            
+            selectedItemBrush = new SolidColorBrush(textRenderTarget, new SharpDX.Color4(1.0f, 1.0f, 0.0f, 0.5f));
 
             InitTable();
         }
 
-        private static long LastRenderTime = 0;
-
         public static void Render(SharpDX.Direct3D11.DeviceContext context)
         {
-            var now = DateTime.Now.Ticks;
-            if (now - LastRenderTime > 6666666) //render texture only at 15 fps seconds
+            
+            if (NeedsTableRedraw) //very slow, only redraw if needed
             {
+                NeedsTableRedraw = false;
                 textRenderTarget.BeginDraw();
-                if (NeedsTableRedraw)
-                {
-                    //very slow, only redraw if needed
-                    NeedsTableRedraw = false;
-                    textRenderTarget.DrawBitmap(InfoTable, 1.0f, BitmapInterpolationMode.NearestNeighbor);
-                }
+                
+                textRenderTarget.DrawBitmap(InfoTable, 1.0f, BitmapInterpolationMode.NearestNeighbor);
 
                 foreach (var row in MenuRows)
+                {
+                    if (row.IsFocused || (row.ActionGroup == SelectedCell.Row.ActionGroup))
+                        textRenderTarget.FillRectangle(row.SelectionRect, selectedItemBrush);
                     row.Draw(textRenderTarget, textFormat, blackBrush);
+                }
 
                 foreach (var action in Actions.Values)
                 {
-                    action.Draw(textRenderTarget);
+                    action.Draw(textRenderTarget); //
                 }
 
-                textRenderTarget.EndDraw(out long tag1, out long tag2);
-                LastRenderTime = now;
+
+                textRenderTarget.EndDraw(out long tag1, out long tag2);                
             }
 
             shader.Apply(context);
@@ -972,12 +1020,15 @@ namespace Undistort
                             break;
                         case "U":
                             if (SelectedCell != null)
-                            {
-                                var rowidx = SelectedCell.RowIndex;
-                                rowidx--;
-                                if (rowidx < 0)
-                                    return;
-                                SelectedCell = MenuRows[rowidx].Columns[0];
+                            {                                
+                                while (prevSelected.Row.ActionGroup == SelectedCell.Row.ActionGroup)
+                                {
+                                    var rowidx = SelectedCell.RowIndex;
+                                    rowidx--;
+                                    if (rowidx < 0)
+                                        return;
+                                    SelectedCell = MenuRows[rowidx].Columns[0];                                    
+                                }
                                 SelectedCell.Row.IsFocused = true;
                                 if (prevSelected != null && prevSelected != SelectedCell) prevSelected.Row.IsFocused = false;
                             }
@@ -985,29 +1036,14 @@ namespace Undistort
                         case "D":
                             if (SelectedCell != null)
                             {
-                                var rowidx = SelectedCell.RowIndex;
-                                rowidx++;
-                                if (rowidx > MenuRows.Count - 1)
-                                    return;
-                                SelectedCell = MenuRows[rowidx].Columns[0];
-                                SelectedCell.Row.IsFocused = true;
-                                if (prevSelected != null && prevSelected != SelectedCell) prevSelected.Row.IsFocused = false;
-                            }
-                            break;
-                        case "R":
-                            if (SelectedCell != null && SelectedCell.RowIndex == 0)
-                            {
-                                var rowidx = SelectedCell.RowIndex;
-                                SelectedCell = MenuRows[rowidx].Columns[0];
-                                SelectedCell.Row.IsFocused = true;
-                                if (prevSelected != null && prevSelected != SelectedCell) prevSelected.Row.IsFocused = false;
-                            }
-                            break;
-                        case "L":
-                            if (SelectedCell != null && SelectedCell.RowIndex == 0)
-                            {
-                                var rowidx = SelectedCell.RowIndex;
-                                SelectedCell = MenuRows[rowidx].Columns[0];
+                                while (prevSelected.Row.ActionGroup == SelectedCell.Row.ActionGroup)
+                                {
+                                    var rowidx = SelectedCell.RowIndex;
+                                    rowidx++;
+                                    if (rowidx > MenuRows.Count - 2) //skip last menuitem
+                                        return;
+                                    SelectedCell = MenuRows[rowidx].Columns[0];
+                                }
                                 SelectedCell.Row.IsFocused = true;
                                 if (prevSelected != null && prevSelected != SelectedCell) prevSelected.Row.IsFocused = false;
                             }
@@ -1015,8 +1051,16 @@ namespace Undistort
                     }
                     break;
                 case ETrackedControllerRole.RightHand:
+                    if ( button == "T")
+                        ShowOriginalValue = true;                    
                     switch (button)
                     {
+                        case "L":
+                            IncreaseAdjustStep();
+                            break;
+                        case "R":
+                            DecreaseAdjustStep();
+                            break;
                         case "G":
                             RenderFlags ^= RenderFlag.Right;
                             break;
@@ -1025,13 +1069,31 @@ namespace Undistort
                             {
                                 Actions.TryGetValue(SelectedCell.Row.ActionGroup, out var group);
                                 if (group != null)
-                                    group.OnButton?.Invoke(button);
+                                    group.OnButtonPressed?.Invoke(button);
                             }
                             break;
                     }
                     break;
+            }            
+            NeedsTableRedraw = true;
+        }
+
+        public static void ButtonUnPressed(string button, ETrackedControllerRole role)
+        {
+            var prevSelected = SelectedCell;
+            switch (role)
+            {
+                case ETrackedControllerRole.RightHand:
+                    if (button == "T")
+                        ShowOriginalValue = false;
+                    if (SelectedCell != null)
+                    {
+                        Actions.TryGetValue(SelectedCell.Row.ActionGroup, out var group);
+                        if (group != null)
+                            group.OnButtonUnPressed?.Invoke(button);
+                    }
+                    break;
             }
-            LastRenderTime = 0;
             NeedsTableRedraw = true;
         }
     }
