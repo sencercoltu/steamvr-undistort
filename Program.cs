@@ -273,6 +273,10 @@ namespace Undistort
         [STAThread]
         private static void Main()
         {
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+            AppDomain.CurrentDomain.FirstChanceException += CurrentDomain_FirstChanceException;
+
+
             var initError = EVRInitError.None;
 
             vrSystem = OpenVR.Init(ref initError);
@@ -722,6 +726,18 @@ namespace Undistort
                 }
             }
 
+        }
+
+        private static void CurrentDomain_FirstChanceException(object sender, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs e)
+        {
+            MessageBox.Show(e.Exception.Message);
+            Application.Exit();
+        }
+
+        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            MessageBox.Show((e.ExceptionObject as Exception).Message); 
+            Application.Exit();
         }
 
         public static void ToggleHiddenMesh()
@@ -1337,12 +1353,13 @@ namespace Undistort
             var confPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)) + "\\LH_Config_In.json";
             var processInfo = new ProcessStartInfo
             {
-                Arguments = "downloadconfig " + confPath,
+                Arguments = "downloadconfig LH_Config_In.json",
                 CreateNoWindow = true,
                 FileName = toolPath,
                 WindowStyle = ProcessWindowStyle.Hidden
 
             };
+            //MessageBox.Show("Running process " + toolPath + " " + processInfo.Arguments);
             var process = Process.Start(processInfo);
             process.WaitForExit();
 
