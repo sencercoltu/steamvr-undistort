@@ -14,6 +14,7 @@ SteamVR lens distortion adjustment utility
 <img src="https://github.com/sencercoltu/steamvr-undistort/blob/master/images/2018-09-23-AM_12_54_34.png?raw=true"/>Without Compositor Correction
   </td></tr></table>
 
+[Download link](https://github.com/sencercoltu/steamvr-undistort/releases)
 
 Purpose is to find optimal values for the lens coefficients and intrinsics in the JSON file, after replacing the original frensel lenses with GearVR or other lenses.
 
