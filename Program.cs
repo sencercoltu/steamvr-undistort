@@ -837,7 +837,7 @@ namespace Undistort
         public static void ResetEyes()
         {
             if (RenderFlags.HasFlag(RenderFlag.Left)) { leftEye.ResetDistortionCoefficients(); leftEye.ResetEyeCenters(); leftEye.CalcFocusCenterAspect(); }
-            if (RenderFlags.HasFlag(RenderFlag.Right)) { rightEye.ResetDistortionCoefficients(); rightEye.ResetEyeCenters(); leftEye.CalcFocusCenterAspect(); }
+            if (RenderFlags.HasFlag(RenderFlag.Right)) { rightEye.ResetDistortionCoefficients(); rightEye.ResetEyeCenters(); rightEye.CalcFocusCenterAspect(); }
 
         }
 
