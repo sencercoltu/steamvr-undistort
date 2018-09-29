@@ -741,11 +741,11 @@ namespace Undistort
                     {
                         new MenuCell(rowIndex, 120)
                         {
-                            GetText = () => { return leftEye.GetData(ShowOriginalValue).BlueCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return leftEye.GetData(ShowOriginalValue).BlueCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                         new MenuCell(rowIndex, 286)
                         {
-                            GetText = () => { return rightEye.GetData(ShowOriginalValue).BlueCenter.X.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                            GetText = () => { return rightEye.GetData(ShowOriginalValue).BlueCenter.Y.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         },
                     }
                 },
@@ -824,7 +824,8 @@ namespace Undistort
                     Columns =
                     {
                         new MenuCell(rowIndex, 120)
-                        {                                                        Checkable = false,
+                        {
+                            Checkable = false,
                             GetText = () => { return AdjustStep.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
                         }
                     }
