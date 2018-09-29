@@ -836,9 +836,9 @@ namespace Undistort
 
         public static void ResetEyes()
         {
-            if (RenderFlags.HasFlag(RenderFlag.Left)) { leftEye.ResetDistortionCoefficients(); leftEye.ResetEyeCenters(); leftEye.CalcFocusCenterAspect(); }
-            if (RenderFlags.HasFlag(RenderFlag.Right)) { rightEye.ResetDistortionCoefficients(); rightEye.ResetEyeCenters(); rightEye.CalcFocusCenterAspect(); }
-
+            if (RenderFlags.HasFlag(RenderFlag.Left)) { leftEye.ResetDistortionCoefficients(); leftEye.CalcFocusCenterAspect(); leftEye.ResetEyeCenters(); }
+            if (RenderFlags.HasFlag(RenderFlag.Right)) { rightEye.ResetDistortionCoefficients(); rightEye.CalcFocusCenterAspect(); rightEye.ResetEyeCenters(); }
+            CrossHairModel.MoveCenter(0, 0, 0, 0);
         }
 
         public static void AdjustCoefficients(float step)

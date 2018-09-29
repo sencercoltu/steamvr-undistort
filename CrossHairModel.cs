@@ -31,9 +31,7 @@ namespace Undistort
 
             vertexBuffer = Buffer.Create(device, BindFlags.VertexBuffer, verticesLeft);
             vertexBufferBinding = new VertexBufferBinding(vertexBuffer, sizeof(float) * 2, 0);
-        }
-
-        
+        }        
 
         public static void Render(DeviceContext context, EVREye eye)
         {
