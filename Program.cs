@@ -24,7 +24,10 @@ namespace Undistort
     {
         private struct VertexShaderData
         {
-            public Matrix WorldViewProj;            
+            public Matrix WorldViewProj;
+            public Vector2 ActiveEyeCenter;
+            public float ActiveAspect;
+            public float Reserved1;
         }
 
         public struct PixelShaderData
@@ -60,7 +63,7 @@ namespace Undistort
             public float Aspect;
             public float FocalX;
             public float FocalY;
-            public float Reserved1;
+            public int ActiveEye;
 
             public Matrix Extrinsics;
             public Matrix3x3 Intrinsics;
@@ -124,6 +127,8 @@ namespace Undistort
         public static DepthStencilView BackBufferDepthStencilView;
 
         public static SharpDX.Direct3D11.Buffer BackBufferIndexBuffer;
+
+        private static int RenderMode = 0;
 
         public class EyeData
         {
@@ -446,7 +451,7 @@ namespace Undistort
                         Usage = Usage.RenderTargetOutput
                     };
 
-                    SharpDX.Direct3D11.Device.CreateWithSwapChain(adapter, DeviceCreationFlags.BgraSupport | DeviceCreationFlags.Debug, swapChainDescription, out d3dDevice, out d3dSwapChain);
+                    SharpDX.Direct3D11.Device.CreateWithSwapChain(adapter, DeviceCreationFlags.BgraSupport /*| DeviceCreationFlags.Debug*/, swapChainDescription, out d3dDevice, out d3dSwapChain);
 
                     factory.MakeWindowAssociation(form.Handle, WindowAssociationFlags.None);
 
@@ -890,8 +895,9 @@ namespace Undistort
         }
 
         public static void ToggleWireFrame()
-        {   
-            pixelShaderData.Wireframe = !pixelShaderData.Wireframe;
+        {
+            RenderMode = (RenderMode + 1) % 3;
+            pixelShaderData.Wireframe = (RenderMode == 1);
         }
 
         public static void ToggleDistortion()
@@ -1115,9 +1121,17 @@ namespace Undistort
             d3dDeviceContext.OutputMerger.SetBlendState(blendState);
             d3dDeviceContext.Rasterizer.State = pixelShaderData.Wireframe ? WireFrameRasterizerState : SolidRasteizerState;
             if (eye.Eye == EVREye.Eye_Left)
+            {
                 d3dDeviceContext.UpdateSubresource(ref leftEye.DistortionData, coefficientConstantBuffer);
+                vertexShaderData.ActiveEyeCenter = leftEye.DistortionData.EyeCenter;
+                vertexShaderData.ActiveAspect = leftEye.DistortionData.Aspect;
+            }
             else if (eye.Eye == EVREye.Eye_Right)
+            {
                 d3dDeviceContext.UpdateSubresource(ref rightEye.DistortionData, coefficientConstantBuffer);
+                vertexShaderData.ActiveEyeCenter = rightEye.DistortionData.EyeCenter;
+                vertexShaderData.ActiveAspect = rightEye.DistortionData.Aspect;
+            }
 
 
             environmentShader.Apply(d3dDeviceContext);
@@ -1129,17 +1143,19 @@ namespace Undistort
 
             //pixelShaderData.Intrinsics = Matrix.Invert(eye.CreateIntrinsics()); //pixelShaderData.Intrinsics.Transpose();            
 
-            for (int i = 0; i < 3; i++)
+            if (RenderMode != 2)
             {
-                if (i == 0 && !RenderFlags.HasFlag(RenderFlag.RenderRed)) continue;
-                if (i == 1 && !RenderFlags.HasFlag(RenderFlag.RenderGreen)) continue;
-                if (i == 2 && !RenderFlags.HasFlag(RenderFlag.RenderBlue)) continue;
-                pixelShaderData.ActiveColor = i;
-                pixelShaderData.Controller = false;                                       
-                d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
-                environmentModel.Render(d3dDeviceContext);
+                for (int i = 0; i < 3; i++)
+                {
+                    if (i == 0 && !RenderFlags.HasFlag(RenderFlag.RenderRed)) continue;
+                    if (i == 1 && !RenderFlags.HasFlag(RenderFlag.RenderGreen)) continue;
+                    if (i == 2 && !RenderFlags.HasFlag(RenderFlag.RenderBlue)) continue;
+                    pixelShaderData.ActiveColor = i;
+                    pixelShaderData.Controller = false;
+                    d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
+                    environmentModel.Render(d3dDeviceContext);
+                }
             }
-
             
             if (pixelShaderData.Wireframe) //revert            
                 d3dDeviceContext.Rasterizer.State = SolidRasteizerState;
@@ -1147,7 +1163,8 @@ namespace Undistort
 
             if (pixelShaderData.Undistort)
             {
-                d3dDeviceContext.OutputMerger.SetBlendState(null);
+                //d3dDeviceContext.OutputMerger.SetBlendState(null);
+                d3dDeviceContext.OutputMerger.SetBlendState(blendState);
                 CrossHairModel.Render(d3dDeviceContext, eye.Eye);
             }
 
