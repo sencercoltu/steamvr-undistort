@@ -336,7 +336,7 @@ namespace Undistort
             vrSystem.GetDXGIOutputInfo(ref adapterIndex);
 
             using (var form = new RenderForm())
-            {
+            {                
                 using (var factory = new Factory4())
                 {
                     form.StartPosition = FormStartPosition.CenterScreen;

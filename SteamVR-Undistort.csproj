@@ -56,6 +56,9 @@
   <PropertyGroup>
     <StartupObject />
   </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>Undistort.ico</ApplicationIcon>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\OpenVR\headers\openvr_api.cs">
       <Link>openvr_api.cs</Link>
@@ -111,6 +114,7 @@
     <Content Include="environment\Wall.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Undistort.ico" />
     <None Include="Resources\hidden.png" />
     <None Include="Resources\InfoTable.png" />
     <None Include="Resources\locked.png" />
