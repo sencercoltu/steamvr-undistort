@@ -111,6 +111,11 @@
     <Content Include="environment\Wall.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <None Include="Resources\hidden.png" />
+    <None Include="Resources\InfoTable.png" />
+    <None Include="Resources\locked.png" />
+    <None Include="Resources\Shaders.hlsl" />
+    <None Include="Resources\shown.png" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include=".NETFramework,Version=v4.6.2">

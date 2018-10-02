@@ -1,6 +1,9 @@
 cbuffer vertexConstBuffer : register(b0)
 {
 	float4x4 WorldViewProj;
+	float2 ActiveEyeCenter;
+	float ActiveAspect;
+	float Reserved1;
 };
 
 cbuffer pixelConstBuffer : register(b1)
@@ -29,7 +32,7 @@ cbuffer distortionConstBuffer : register(b2)
 	float Aspect;
 	float FocalX;
 	float FocalY;
-	float Reserved1;
+	int ActiveEye;
 
 	float4x4 Extrinsics;
 	float3x3 Intrinsics;
@@ -86,7 +89,7 @@ float4 Model_PS(MODEL_PS_IN input) : SV_Target
 
 float4 CrossHair_VS(float2 position : POSITION) : SV_POSITION
 {
-	return float4(position, 0, 1);
+	return float4(float2(position.x - ActiveEyeCenter.x, (position.y - ActiveEyeCenter.y) / ActiveAspect), 1.0f, 1.0f); //put a bit away from eye
 }
 
 float4 CrossHair_PS(float4 position : SV_POSITION) : SV_Target
