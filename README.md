@@ -41,6 +41,7 @@ Adjustment is done with two motion controllers. Here are the mappings for the Vi
 ### Right Controller
 #### Application Button: Toggle between wireframe and texturd rendering.
 #### TouchPad LEFT/RIGHT Buttons: Decrease/Increase adjustment step.
+#### TouchPad UP/DOWN Buttons: Adjust selected/linked values. Keep pressed for auto-repeat.
 #### TouchPad MIDDLE: Hide/Show hidden mesh.
 #### Grip: Toggle right eye adjustment flag.
 #### Trigger: Hold to show original unadjusted values. Also enables/disables rendering of selected color channels. 
