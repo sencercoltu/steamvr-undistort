@@ -1,5 +1,5 @@
 # Blender MTL File: 'environment.blend'
-# Material Count: 3
+# Material Count: 5
 
 newmtl Material
 Ns 96.078431
@@ -22,7 +22,7 @@ Ni 1.000000
 d 1.000000
 illum 2
 
-newmtl Material_Wall
+newmtl Material_Wall1
 Ns 96.078431
 Ka 1.000000 1.000000 1.000000
 Kd 0.000000 0.654167 0.000000
@@ -31,4 +31,26 @@ Ke 0.000000 0.120000 0.000000
 Ni 1.000000
 d 1.000000
 illum 2
-map_Kd Wall.png
+map_Kd Wall1.png
+
+newmtl Material_Wall2.png
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.000000 0.654167 0.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.120000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd Wall2.png
+
+newmtl Material_Wall3.png
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.000000 0.654167 0.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.120000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd Wall3.png

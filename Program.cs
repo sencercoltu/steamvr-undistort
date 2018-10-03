@@ -1177,7 +1177,7 @@ namespace Undistort
 
             if (pixelShaderData.Undistort)
             {
-                //d3dDeviceContext.OutputMerger.SetBlendState(null);
+                d3dDeviceContext.OutputMerger.SetBlendState(null);
                 d3dDeviceContext.OutputMerger.SetBlendState(blendState);
                 CrossHairModel.Render(d3dDeviceContext, eye.Eye);
             }

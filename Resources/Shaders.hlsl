@@ -89,12 +89,14 @@ float4 Model_PS(MODEL_PS_IN input) : SV_Target
 
 float4 CrossHair_VS(float2 position : POSITION) : SV_POSITION
 {
+	//return float4(position, 1.0f, 1.0f);
+	//return mul(float4(position, 1.0f, 1.0f), WorldViewProj);
 	return float4(float2(position.x - ActiveEyeCenter.x, (position.y - ActiveEyeCenter.y) / ActiveAspect), 1.0f, 1.0f); //put a bit away from eye
 }
 
 float4 CrossHair_PS(float4 position : SV_POSITION) : SV_Target
 {
-   return float4(0.0, 1.0, 0.0, 1.0);
+   return float4(0.0, 1.0, 0.0, 0.5f);
 }
 
 struct INFO_VS_IN
@@ -170,9 +172,12 @@ float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 	float scale = 1.0 + GrowToUndistort;	
 
 	float2 UV = (input.uv * 2) - 1;	//convert [0;1] to [-1;1]	
+	UV.y *= Aspect;
+
+	
 	float2 center = RedCenter.xy;	
+	center.y *= Aspect;
 	float2 ruv = UV - center;
-	ruv.y *= Aspect;
 	float rr2 = dot(ruv, ruv);		
 	float rk = 1.0 / (RedCoeffs.w + RedCoeffs.x * rr2 + RedCoeffs.y * rr2 * rr2 + RedCoeffs.z * rr2 * rr2 * rr2);	
 	ruv = (ruv * rk + center) / scale;
@@ -180,9 +185,9 @@ float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 	ruv = (ruv + 1) / 2; //convert [-1;1] back to [0;1]
 	float R = diffuseTexture.Sample(diffuseSampler, ruv).r;
 
-	center = GreenCenter.xy;	
-	float2 guv = UV - center;
-	guv.y *= Aspect;
+	center = GreenCenter.xy;
+	center.y *= Aspect;
+	float2 guv = UV - center;	
 	float gr2 = dot(guv, guv);
 	float gk = 1.0 / (GreenCoeffs.w + GreenCoeffs.x * gr2 + GreenCoeffs.y * gr2 * gr2 + GreenCoeffs.z * gr2 * gr2 * gr2);
 	guv = (guv * gk + center) / scale;
@@ -190,9 +195,9 @@ float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 	guv = (guv + 1) / 2;
 	float G = diffuseTexture.Sample(diffuseSampler, guv).g;
 	
-	center = BlueCenter.xy;	
-	float2 buv = UV - center;
-	buv.y *= Aspect;
+	/center = BlueCenter.xy;	
+	center.y *= Aspect;
+	float2 buv = UV - center;	
 	float br2 = dot(buv, buv);
 	float bk = 1.0 / (BlueCoeffs.w + BlueCoeffs.x * br2 + BlueCoeffs.y * br2 * br2 + BlueCoeffs.z * br2 * br2 * br2);	
 	buv = (buv * bk + center) / scale;

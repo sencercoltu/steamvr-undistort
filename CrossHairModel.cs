@@ -28,7 +28,7 @@ namespace Undistort
                 new InputElement("POSITION", 0, Format.R32G32_Float, 0)
             });
 
-            ModifyCircles(device, 0.05f);
+            ModifyCircles(device, 0.1f);
         }        
 
         public static void Render(DeviceContext context, EVREye eye)
