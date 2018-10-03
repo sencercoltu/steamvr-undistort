@@ -20,7 +20,7 @@ SteamVR lens distortion adjustment utility
 Purpose is to find optimal values for the lens coefficients and intrinsics in the JSON file, after replacing the original frensel lenses with GearVR or other lenses.
 
 The JSON file is read to file LH_Config_In.json via the lighthouse console at startup automatically.
-Adjusted values are saved to LH_Config_Out.json file on exit. (No auto update to device because it's unsafe, you can lose your original configuration. Manually update after backing up original config!) 
+~~Adjusted values are saved to LH_Config_Out.json file on exit. (No auto update to device because it's unsafe, you can lose your original configuration. Manually update after backing up original config!)~~ You can write your adjusted config by selecting the appropriate menu item.
 
 Environment model is rendered three times for each RGB color. (except center crosshair, hidden mesh, controllers and adjustment panel).
 The environment model path is hardcoded and points to the "environment" folder. Download any single .obj environment and put it in the "environment" folder and rename the .obj and .mtl files to "environment".
