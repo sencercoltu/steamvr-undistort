@@ -6,6 +6,7 @@ using SharpDX.DXGI;
 using SharpDX.Mathematics.Interop;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -37,6 +38,8 @@ namespace Undistort
         private static SharpDX.Color4 activeColor = new SharpDX.Color4(0f, 1, 0f, 1);
         private static SharpDX.Color4 inactiveColor = new SharpDX.Color4(1, 0.666f, 0.784f, 1);
 
+        private static System.Timers.Timer ButtonTimer;
+
         public class IconArea
         {
             public string Type= "L";
@@ -49,7 +52,7 @@ namespace Undistort
             public Func<bool> IsActive;
             public Func<bool> IsColorVisible;
             public Action<string> OnButtonPressed;
-            public Action<string> OnButtonUnPressed;
+            //public Action<string> OnButtonUnPressed;
             public void Draw(RenderTarget textRenderTarget)
             {
                 foreach (var point in Icons)
@@ -64,7 +67,6 @@ namespace Undistort
                 }
             }
             public List<IconArea> Icons = new List<IconArea>();
-
         }
 
         private static Dictionary<string, ActionGroup> Actions = new Dictionary<string, ActionGroup>();
@@ -127,6 +129,38 @@ namespace Undistort
                     column.Draw(textRenderTarget, textFormat, brush);
             }
         };
+
+        private static double TimerDelay = 1000.0;
+
+        private static string TimerButton = "";
+
+        static AdjustmentPanelModel()
+        {
+            ButtonTimer = new System.Timers.Timer(TimerDelay)
+            {                
+                AutoReset = false,
+                Enabled = false
+            };
+            ButtonTimer.Elapsed += ButtonTimer_Elapsed;
+        }
+
+        private static void ButtonTimer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            //Debug.Write("T");
+            TimerDelay = TimerDelay / 2.0;
+            if (TimerDelay < 5) TimerDelay = 5;
+            ButtonTimer.Interval = TimerDelay;
+            if (SelectedCell != null)
+            {
+                Actions.TryGetValue(SelectedCell.Row.ActionGroup, out var group);
+                if (group != null)
+                {
+                    group.OnButtonPressed?.Invoke(TimerButton);
+                    NeedsTableRedraw = true;
+                }
+            }
+            ButtonTimer.Start();
+        }
 
         private static List<MenuRow> MenuRows = new List<MenuRow>();
 
@@ -1068,6 +1102,14 @@ namespace Undistort
                         default:
                             if (SelectedCell != null)
                             {
+                                if (button == "U" || button == "D")
+                                {
+                                    TimerButton = button;
+                                    TimerDelay = 1000;
+                                    ButtonTimer.Interval = TimerDelay;                                    
+                                    ButtonTimer.Start();
+                                }
+
                                 Actions.TryGetValue(SelectedCell.Row.ActionGroup, out var group);
                                 if (group != null)
                                     group.OnButtonPressed?.Invoke(button);
@@ -1085,14 +1127,22 @@ namespace Undistort
             switch (role)
             {
                 case ETrackedControllerRole.RightHand:
+                    if (button == "U" || button == "D")
+                    {
+                        ButtonTimer.Stop();
+                        TimerDelay = 1000;
+                        ButtonTimer.Interval = TimerDelay;
+                        TimerButton = "";
+                    }
+
                     if (button == "T")
                         ShowOriginalValue = false;
-                    if (SelectedCell != null)
-                    {
-                        Actions.TryGetValue(SelectedCell.Row.ActionGroup, out var group);
-                        if (group != null)
-                            group.OnButtonUnPressed?.Invoke(button);
-                    }
+                    //if (SelectedCell != null)
+                    //{
+                    //    Actions.TryGetValue(SelectedCell.Row.ActionGroup, out var group);
+                    //    if (group != null)
+                    //        group.OnButtonUnPressed?.Invoke(button);
+                    //}
                     break;
             }
             NeedsTableRedraw = true;

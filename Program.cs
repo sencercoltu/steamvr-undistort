@@ -553,6 +553,8 @@ namespace Undistort
 
                     QueryDevices();
 
+                    vertexShaderData.Reserved1 = 0f; //prevent compiler warning
+
                     vertexConstantBuffer = new SharpDX.Direct3D11.Buffer(d3dDevice, Utilities.SizeOf<VertexShaderData>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
                     pixelConstantBuffer = new SharpDX.Direct3D11.Buffer(d3dDevice, Utilities.SizeOf<PixelShaderData>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
                     coefficientConstantBuffer = new SharpDX.Direct3D11.Buffer(d3dDevice, Utilities.SizeOf<DistortShaderData>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
