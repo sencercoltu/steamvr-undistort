@@ -193,9 +193,9 @@ namespace Undistort
             public void UpdateIntrinsicsFromFocusAndCenter()
             {
                 DistortionData.Intrinsics.M11 = 2.0f * DistortionData.FocalX / Width;
-                DistortionData.Intrinsics.M13 = DistortionData.EyeCenter.X;
+                DistortionData.Intrinsics.M31 = DistortionData.EyeCenter.X;
                 DistortionData.Intrinsics.M22 = 2.0f * DistortionData.FocalY / Height;
-                DistortionData.Intrinsics.M23 = DistortionData.EyeCenter.Y;
+                DistortionData.Intrinsics.M32 = DistortionData.EyeCenter.Y;
             }
 
             public void CalcFocusCenterAspect()
@@ -610,7 +610,7 @@ namespace Undistort
 
                     AdjustmentPanelModel.Init(d3dDevice); 
                     CrossHairModel.Init(d3dDevice);
-                    CrossHairModel.MoveCenter(0, 0, 0, 0);
+                    AdjustCenter(0, 0, 0, 0);
 
                     hmaShader = new Shader(d3dDevice, "HiddenMesh_VS", "HiddenMesh_PS", new InputElement[]
                     {
@@ -798,8 +798,19 @@ namespace Undistort
 
         public static void AdjustEyeCenters(float xStep, float yStep)
         {
-            CrossHairModel.MoveCenter(RenderFlags.HasFlag(RenderFlag.Left) ? xStep : 0, RenderFlags.HasFlag(RenderFlag.Left) ? yStep : 0, RenderFlags.HasFlag(RenderFlag.Right) ? xStep : 0, RenderFlags.HasFlag(RenderFlag.Right) ? yStep : 0);            
+            AdjustCenter(RenderFlags.HasFlag(RenderFlag.Left) ? xStep : 0, RenderFlags.HasFlag(RenderFlag.Left) ? yStep : 0, RenderFlags.HasFlag(RenderFlag.Right) ? xStep : 0, RenderFlags.HasFlag(RenderFlag.Right) ? yStep : 0);            
         }
+
+        private static void AdjustCenter(double lx, double ly, double rx, double ry)
+        {
+            leftEye.DistortionData.EyeCenter.X += (float)lx;
+            leftEye.DistortionData.EyeCenter.Y += (float)ly;
+            leftEye.UpdateIntrinsicsFromFocusAndCenter();
+            rightEye.DistortionData.EyeCenter.X += (float)rx;
+            rightEye.DistortionData.EyeCenter.Y += (float)ry;
+            rightEye.UpdateIntrinsicsFromFocusAndCenter();
+        }
+
 
         public static void AdjustColorCenters(float xStep, float yStep)
         {
@@ -845,7 +856,7 @@ namespace Undistort
         {
             if (RenderFlags.HasFlag(RenderFlag.Left)) { leftEye.ResetDistortionCoefficients(); leftEye.CalcFocusCenterAspect(); leftEye.ResetEyeCenters(); }
             if (RenderFlags.HasFlag(RenderFlag.Right)) { rightEye.ResetDistortionCoefficients(); rightEye.CalcFocusCenterAspect(); rightEye.ResetEyeCenters(); }
-            CrossHairModel.MoveCenter(0, 0, 0, 0);
+            AdjustCenter(0, 0, 0, 0);
         }
 
         public static void AdjustCoefficients(float step)
@@ -906,6 +917,7 @@ namespace Undistort
         {
             pixelShaderData.Undistort = !pixelShaderData.Undistort;
         }
+
 
         public static void AdjustFocus(float stepX, float stepY)
         {

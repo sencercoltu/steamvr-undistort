@@ -81,16 +81,5 @@ namespace Undistort
 
         }
 
-        public static void MoveCenter(double lx, double ly, double rx, double ry)
-        {
-            Program.leftEye.DistortionData.EyeCenter.X += (float)lx;
-            Program.leftEye.DistortionData.EyeCenter.Y += (float)ly;
-            Program.rightEye.DistortionData.EyeCenter.X += (float)rx;
-            Program.rightEye.DistortionData.EyeCenter.Y += (float)ry;
-            //verticesLeft[1] = verticesLeft[3] = -Program.leftEye.DistortionData.EyeCenter.Y;
-            //verticesRight[1] = verticesRight[3] = -Program.rightEye.DistortionData.EyeCenter.Y;
-            //verticesLeft[4] = verticesLeft[6] = -Program.leftEye.DistortionData.EyeCenter.X;
-            //verticesRight[4] = verticesRight[6] = -Program.rightEye.DistortionData.EyeCenter.X;
-        }
     }
 }
