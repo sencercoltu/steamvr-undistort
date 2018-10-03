@@ -1177,7 +1177,7 @@ namespace Undistort
 
             if (pixelShaderData.Undistort)
             {
-                d3dDeviceContext.OutputMerger.SetBlendState(null);
+                //d3dDeviceContext.OutputMerger.SetBlendState(null);
                 d3dDeviceContext.OutputMerger.SetBlendState(blendState);
                 CrossHairModel.Render(d3dDeviceContext, eye.Eye);
             }
@@ -1218,9 +1218,9 @@ namespace Undistort
             {
                 d3dDeviceContext.Rasterizer.State = pixelShaderData.Wireframe ? ncWireFrameRasterizerState : ncRasterizerState;
                 //render hidden mesh area just for control distortion area
-                vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;
-                vertexShaderData.WorldViewProj.Transpose();
-                d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+                //vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;
+                //vertexShaderData.WorldViewProj.Transpose();
+                //d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
 
                             
                 d3dDeviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;

@@ -90,7 +90,7 @@ float4 Model_PS(MODEL_PS_IN input) : SV_Target
 float4 CrossHair_VS(float2 position : POSITION) : SV_POSITION
 {
 	//return float4(position, 1.0f, 1.0f);
-	//return mul(float4(position, 1.0f, 1.0f), WorldViewProj);
+	//return mul(float4(position, 1.0f, 1.0f), PlainProjection);
 	return float4(float2(position.x - ActiveEyeCenter.x, (position.y - ActiveEyeCenter.y) / ActiveAspect), 1.0f, 1.0f); //put a bit away from eye
 }
 
@@ -138,13 +138,14 @@ float4 Backbuffer_PS(INFO_PS_IN input) : SV_Target
 }
 
 float4 HiddenMesh_VS(float2 position : POSITION) : SV_POSITION
-{
+{ 
 	return float4(position, 0, 1);
+	//return float4(float2(position.x - ActiveEyeCenter.x, position.y - ActiveEyeCenter.y), 0.01f, 1.0f); //put a bit away from eye
 }
 
 float4 HiddenMesh_PS(float4 position : SV_POSITION) : SV_Target
 {
-   return float4(0.0, 0.0, 0.0, 1); 
+   return float4(0.1, 0.1, 0.1, 1);
 }
 
 struct Undistort_VS_IN
@@ -173,8 +174,7 @@ float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 
 	float2 UV = (input.uv * 2) - 1;	//convert [0;1] to [-1;1]	
 	UV.y *= Aspect;
-
-	
+		
 	float2 center = RedCenter.xy;	
 	center.y *= Aspect;
 	float2 ruv = UV - center;
@@ -195,9 +195,9 @@ float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 	guv = (guv + 1) / 2;
 	float G = diffuseTexture.Sample(diffuseSampler, guv).g;
 	
-	/center = BlueCenter.xy;	
+	center = BlueCenter.xy;	
 	center.y *= Aspect;
-	float2 buv = UV - center;	
+	float2 buv = UV - center;		
 	float br2 = dot(buv, buv);
 	float bk = 1.0 / (BlueCoeffs.w + BlueCoeffs.x * br2 + BlueCoeffs.y * br2 * br2 + BlueCoeffs.z * br2 * br2 * br2);	
 	buv = (buv * bk + center) / scale;
