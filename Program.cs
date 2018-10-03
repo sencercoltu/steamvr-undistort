@@ -31,7 +31,7 @@ namespace Undistort
         }
 
         public struct PixelShaderData
-        {            
+        {
             public Vector4 LightPosition;
             private int _Undistort; //bool is 1 byte inside struct, we use int to convert to 4 bytes and use getter setter
             public bool Undistort { get { return _Undistort == 1; } set { _Undistort = value ? 1 : 0; } }
@@ -68,7 +68,7 @@ namespace Undistort
             public Matrix Extrinsics;
             public Matrix3x3 Intrinsics;
             public Vector3 Reserved2;
-            
+
         }
 
 
@@ -87,7 +87,7 @@ namespace Undistort
 
 
 
-        private static SharpDX.Direct3D11.Device d3dDevice;
+        public static SharpDX.Direct3D11.Device d3dDevice;
         private static DeviceContext d3dDeviceContext;
         public static SwapChain d3dSwapChain;
         public static RawColor4 d3dClearColor;
@@ -111,7 +111,7 @@ namespace Undistort
 
         private static Shader hmaShader;
         private static VertexBufferBinding hmaVertexBufferBinding;
-                
+
         private static IDictionary<string, object> lightHouseConfigJson;
 
         private static VertexShaderData vertexShaderData = default(VertexShaderData);
@@ -146,7 +146,7 @@ namespace Undistort
 
             public EVREye Eye;
             public Size FrameSize;
-            public IDictionary<string, object> Json;            
+            public IDictionary<string, object> Json;
             public Matrix OriginalProjection;
             public Matrix EyeToHeadView;
             public HiddenAreaMesh_t HiddenAreaMesh;
@@ -253,7 +253,7 @@ namespace Undistort
             K3 = 1 << 7,
             RenderRed = 1 << 8,
             RenderGreen = 1 << 9,
-            RenderBlue = 1 << 10,            
+            RenderBlue = 1 << 10,
             ALL = RedActive | GreenActive | BlueActive | Left | Right | K1 | K2 | K3 | RenderRed | RenderGreen | RenderBlue
         }
 
@@ -269,11 +269,14 @@ namespace Undistort
             for (int i = 0; i < length; i++)
             {
                 IntPtr ins = new IntPtr(unmanagedArray.ToInt64() + i * size);
-                mangagedArray[i] = (T) Marshal.PtrToStructure(ins, typeof(T));
+                mangagedArray[i] = (T)Marshal.PtrToStructure(ins, typeof(T));
             }
         }
 
         public static float AdjustStep = 0.001f;
+
+        public static string OvrPath;
+        private static RenderForm MainForm;
 
         [STAThread]
         private static void Main()
@@ -289,9 +292,9 @@ namespace Undistort
             if (initError != EVRInitError.None)
                 return;
 
-            var ovrPath = OpenVR.RuntimePath();
+            OvrPath = OpenVR.RuntimePath();
 
-            LoadLHSettings(ovrPath);
+            LoadLHSettings(OvrPath);
 
             vrCompositor = OpenVR.Compositor;
 
@@ -312,7 +315,7 @@ namespace Undistort
 
             leftEye.FrameSize = rightEye.FrameSize = new Size((int)width, (int)height);
             width *= 2;
-            
+
             //scale down proportionally to fit
             while (width > Screen.PrimaryScreen.Bounds.Width || height > Screen.PrimaryScreen.Bounds.Height)
             {
@@ -324,7 +327,7 @@ namespace Undistort
 
             leftEye.OriginalProjection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Left, EyeData.Near, EyeData.Far));
             rightEye.OriginalProjection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Right, EyeData.Near, EyeData.Far));
-            
+
             leftEye.EyeToHeadView = Convert(vrSystem.GetEyeToHeadTransform(EVREye.Eye_Left));
             rightEye.EyeToHeadView = Convert(vrSystem.GetEyeToHeadTransform(EVREye.Eye_Right));
 
@@ -335,24 +338,18 @@ namespace Undistort
 
             vrSystem.GetDXGIOutputInfo(ref adapterIndex);
 
-            using (var form = new RenderForm())
-            {                
+            using (MainForm = new RenderForm())
+            {
                 using (var factory = new Factory4())
                 {
-                    form.StartPosition = FormStartPosition.CenterScreen;
-                    form.Text = "SteamVR Lens Adjustment Utility";
-                    form.ClientSize = WindowSize;
-                    form.FormBorderStyle = FormBorderStyle.FixedSingle;
-                    form.MinimizeBox = false;
-                    form.MaximizeBox = false;
+                    MainForm.StartPosition = FormStartPosition.CenterScreen;
+                    MainForm.Text = "SteamVR Lens Adjustment Utility";
+                    MainForm.ClientSize = WindowSize;
+                    MainForm.FormBorderStyle = FormBorderStyle.FixedSingle;
+                    MainForm.MinimizeBox = false;
+                    MainForm.MaximizeBox = false;
 
-                    form.FormClosing += (s, e) =>
-                    {
-                        SaveLHSettings(ovrPath);
-                    };
-
-
-                    form.KeyDown += (s, e) =>
+                    MainForm.KeyDown += (s, e) =>
                     {
                         if (e.Control)
                             ToggleHiddenMesh();
@@ -360,13 +357,13 @@ namespace Undistort
                         switch (e.KeyCode)
                         {
                             case Keys.NumPad5:
-                                ToggleDistortion();                                
+                                ToggleDistortion();
                                 break;
                             case Keys.PageUp:
                                 ToggleWireFrame();
                                 break;
                             case Keys.Escape:
-                                form.Close();
+                                MainForm.Close();
                                 break;
                             case Keys.NumPad7:
                                 RenderFlags ^= RenderFlag.RedActive;
@@ -393,7 +390,7 @@ namespace Undistort
                                 RenderFlags ^= RenderFlag.Right;
                                 break;
                             case Keys.Subtract:
-                                AdjustFocus(-AdjustStep, -AdjustStep);                                
+                                AdjustFocus(-AdjustStep, -AdjustStep);
                                 break;
                             case Keys.Add:
                                 AdjustFocus(AdjustStep, AdjustStep);
@@ -445,7 +442,7 @@ namespace Undistort
                             Height = WindowSize.Height,
                             RefreshRate = new Rational(90, 1)
                         },
-                        OutputHandle = form.Handle,
+                        OutputHandle = MainForm.Handle,
                         SampleDescription = new SampleDescription(1, 0),
                         SwapEffect = SwapEffect.Discard,
                         Usage = Usage.RenderTargetOutput
@@ -453,7 +450,7 @@ namespace Undistort
 
                     SharpDX.Direct3D11.Device.CreateWithSwapChain(adapter, DeviceCreationFlags.BgraSupport /*| DeviceCreationFlags.Debug*/, swapChainDescription, out d3dDevice, out d3dSwapChain);
 
-                    factory.MakeWindowAssociation(form.Handle, WindowAssociationFlags.None);
+                    factory.MakeWindowAssociation(MainForm.Handle, WindowAssociationFlags.None);
 
                     d3dDeviceContext = d3dDevice.ImmediateContext;
 
@@ -534,7 +531,7 @@ namespace Undistort
                             1f, 1f, 0f, 1, 0,   //2
                             0f, 1f, 0f, 0, 0 //3
                         });
-                   
+
                     UndistortShader.Load(d3dDevice);
 
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\928165436\spacecpod\spacecpod.obj";
@@ -547,7 +544,7 @@ namespace Undistort
                     environmentModel = modelLoader.Load(fileName);
                     environmentModel.SetInputLayout(d3dDevice, ShaderSignature.GetInputSignature(environmentShader.vertexShaderByteCode));
 
-                    fileName = ovrPath + "\\resources\\rendermodels\\vr_controller_vive_1_5\\vr_controller_vive_1_5.obj";
+                    fileName = OvrPath + "\\resources\\rendermodels\\vr_controller_vive_1_5\\vr_controller_vive_1_5.obj";
                     controllerModel = modelLoader.Load(fileName);
                     controllerModel.SetInputLayout(d3dDevice, ShaderSignature.GetInputSignature(environmentShader.vertexShaderByteCode));
 
@@ -608,7 +605,7 @@ namespace Undistort
                     d3dDeviceContext.PixelShader.SetConstantBuffer(1, pixelConstantBuffer);
                     d3dDeviceContext.PixelShader.SetConstantBuffer(2, coefficientConstantBuffer);
 
-                    AdjustmentPanelModel.Init(d3dDevice); 
+                    AdjustmentPanelModel.Init(d3dDevice);
                     CrossHairModel.Init(d3dDevice);
                     AdjustCenter(0, 0, 0, 0);
 
@@ -642,7 +639,7 @@ namespace Undistort
 
                     //SetProjectionZoomLevel();
 
-                    RenderLoop.Run(form, () =>
+                    RenderLoop.Run(MainForm, () =>
                     {
                         while (vrSystem.PollNextEvent(ref vrEvent, eventSize))
                         {
@@ -655,12 +652,12 @@ namespace Undistort
                                     break;
 
                                 case EVREventType.VREvent_TrackedDeviceUpdated:
-                                    {                                        
+                                    {
                                         QueryDevices();
 
                                     }
                                     break;
-                                case EVREventType.VREvent_TrackedDeviceRoleChanged:                                
+                                case EVREventType.VREvent_TrackedDeviceRoleChanged:
                                     {
                                         //controllers.Remove(vrEvent.trackedDeviceIndex);
                                         QueryDevices();
@@ -687,7 +684,7 @@ namespace Undistort
                                     break;
                                 case EVREventType.VREvent_Quit:
                                     //case EVREventType.VREvent_ProcessQuit:
-                                    form.Close();
+                                    MainForm.Close();
                                     break;
                                 case EVREventType.VREvent_ButtonPress:
                                     {
@@ -775,7 +772,7 @@ namespace Undistort
 
         private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            MessageBox.Show((e.ExceptionObject as Exception).Message); 
+            MessageBox.Show((e.ExceptionObject as Exception).Message);
             Application.Exit();
         }
 
@@ -798,7 +795,7 @@ namespace Undistort
 
         public static void AdjustEyeCenters(float xStep, float yStep)
         {
-            AdjustCenter(RenderFlags.HasFlag(RenderFlag.Left) ? xStep : 0, RenderFlags.HasFlag(RenderFlag.Left) ? yStep : 0, RenderFlags.HasFlag(RenderFlag.Right) ? xStep : 0, RenderFlags.HasFlag(RenderFlag.Right) ? yStep : 0);            
+            AdjustCenter(RenderFlags.HasFlag(RenderFlag.Left) ? xStep : 0, RenderFlags.HasFlag(RenderFlag.Left) ? yStep : 0, RenderFlags.HasFlag(RenderFlag.Right) ? xStep : 0, RenderFlags.HasFlag(RenderFlag.Right) ? yStep : 0);
         }
 
         private static void AdjustCenter(double lx, double ly, double rx, double ry)
@@ -1149,9 +1146,9 @@ namespace Undistort
 
 
             environmentShader.Apply(d3dDeviceContext);
-            pixelShaderData.LightPosition = new Vector4(headMatrix.TranslationVector, 1);             
+            pixelShaderData.LightPosition = new Vector4(headMatrix.TranslationVector, 1);
 
-            vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;            
+            vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;
             vertexShaderData.WorldViewProj.Transpose();
             d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
 
@@ -1170,7 +1167,7 @@ namespace Undistort
                     environmentModel.Render(d3dDeviceContext);
                 }
             }
-            
+
             if (pixelShaderData.Wireframe) //revert            
                 d3dDeviceContext.Rasterizer.State = SolidRasteizerState;
 
@@ -1222,7 +1219,7 @@ namespace Undistort
                 //vertexShaderData.WorldViewProj.Transpose();
                 //d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
 
-                            
+
                 d3dDeviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
                 hmaVertexBufferBinding = new VertexBufferBinding(eye.HiddenAreaMeshVertexBuffer, sizeof(float) * 2, 0);
                 d3dDeviceContext.InputAssembler.SetVertexBuffers(0, hmaVertexBufferBinding);
@@ -1246,7 +1243,7 @@ namespace Undistort
             }
 
             //render eye to screen            
-            d3dDeviceContext.Rasterizer.SetViewport(0, 0, WindowSize.Width, WindowSize.Height);                        
+            d3dDeviceContext.Rasterizer.SetViewport(0, 0, WindowSize.Width, WindowSize.Height);
             d3dDeviceContext.OutputMerger.SetTargets(BackBufferDepthStencilView, BackBufferTextureView);
             d3dDeviceContext.OutputMerger.SetDepthStencilState(DepthStencilState);
             d3dDeviceContext.OutputMerger.SetBlendState(null);
@@ -1348,14 +1345,45 @@ namespace Undistort
             return destination;
         }
 
+        public static void SaveParameters()
+        {
+            if (MessageBox.Show(null, "Only upload configuration if you know what you are doing.\n(Did you backup your original config?)\nA backup of the input file will be created anyway.", "Confirm configuration upload.", MessageBoxButtons.OKCancel) == DialogResult.OK)
+            {
+                if (MessageBox.Show(null, "Are you sure?", "Confirm configuration upload.", MessageBoxButtons.YesNo) == DialogResult.No)
+                    return;
+
+                //backup input file first
+                File.Copy("LH_Config_In.json", "LH_Config_In." + DateTime.Now.Ticks + ".backup.json");
+
+                SaveLHSettings(OvrPath);
+
+                var toolPath = OvrPath + @"tools\lighthouse\bin\win32\lighthouse_console.exe";
+                //var confPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)) + "\\LH_Config_Out.json";
+                var processInfo = new ProcessStartInfo
+                {
+                    Arguments = "uploadconfig LH_Config_Out.json",
+                    //CreateNoWindow = true,
+                    FileName = toolPath,
+                    //WindowStyle = ProcessWindowStyle.Hidden
+
+                };
+                //MessageBox.Show("Running process " + toolPath + " " + processInfo.Arguments);
+                var process = Process.Start(processInfo);
+                process.WaitForExit();
+
+                MessageBox.Show("Now you have to restart SteamVR.");
+                MainForm.Close();
+            }
+        }
+
         private static void SaveLHSettings(string ovrPath)
         {
             var confPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)) + "\\LH_Config_Out.json";
 
             SaveEyeSettings(leftEye);
-            SaveEyeSettings(rightEye); 
+            SaveEyeSettings(rightEye);
 
-            var jsonData = FastJson.Serialize(lightHouseConfigJson);            
+            var jsonData = FastJson.Serialize(lightHouseConfigJson);
             File.WriteAllText(confPath, jsonData.Prettify());
         }
 
@@ -1379,21 +1407,21 @@ namespace Undistort
             r[0] = (double)eye.DistortionData.RedCoeffs.X; r[1] = (double)eye.DistortionData.RedCoeffs.Y; r[2] = (double)eye.DistortionData.RedCoeffs.Z;
 
             var row = eye.Json["intrinsics"] as object[];
-            var col = row[0] as object[];            
+            var col = row[0] as object[];
             col[0] = (double)eye.DistortionData.Intrinsics.M11;
             col[1] = (double)eye.DistortionData.Intrinsics.M21;
             col[2] = (double)eye.DistortionData.Intrinsics.M31;
-            col = row[1] as object[];                 
+            col = row[1] as object[];
             col[0] = (double)eye.DistortionData.Intrinsics.M12;
             col[1] = (double)eye.DistortionData.Intrinsics.M22;
             col[2] = (double)eye.DistortionData.Intrinsics.M32;
-            col = row[2] as object[];                 
+            col = row[2] as object[];
             col[0] = (double)eye.DistortionData.Intrinsics.M13;
             col[1] = (double)eye.DistortionData.Intrinsics.M23;
             col[2] = (double)eye.DistortionData.Intrinsics.M33;
 
             row = eye.Json["extrinsics"] as object[];
-            col = row[0] as object[];            
+            col = row[0] as object[];
             col[0] = (double)eye.DistortionData.Extrinsics.M11;
             col[1] = (double)eye.DistortionData.Extrinsics.M21;
             col[2] = (double)eye.DistortionData.Extrinsics.M31;
@@ -1426,7 +1454,7 @@ namespace Undistort
             var process = Process.Start(processInfo);
             process.WaitForExit();
 
-            var jsonData = File.ReadAllText(confPath);            
+            var jsonData = File.ReadAllText(confPath);
             File.WriteAllText(confPath, jsonData.Prettify());
             lightHouseConfigJson = FastJson.Deserialize<IDictionary<string, object>>(jsonData);
 

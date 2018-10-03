@@ -475,6 +475,29 @@ namespace Undistort
                 IsActive = () => { return true; },
                 OnButtonPressed = (b) => { },
             });
+            Actions.Add("RADIUS", new ActionGroup
+            {
+                OnToggle = () => { },
+                IsActive = () => { return true; },
+                OnButtonPressed = (b) => 
+                {
+                    switch (b)
+                    {
+                        case "U":
+                            CrossHairModel.ModifyCircles(Program.d3dDevice, AdjustStep);
+                            break;
+                        case "D":
+                            CrossHairModel.ModifyCircles(Program.d3dDevice, -AdjustStep);
+                            break;
+                    }
+                },
+            });
+            Actions.Add("WRITE", new ActionGroup
+            {
+                OnToggle = () => { SaveParameters(); },
+                IsActive = () => { return true; },
+                OnButtonPressed = (b) => { },
+            });
 
 
             int rowIndex = 0;
@@ -852,6 +875,30 @@ namespace Undistort
                         }
                     }
                 },
+                new MenuRow(++rowIndex, "RADIUS", 120) //step
+                {
+                    BackColor = new RawColor4(0.97255f, 0.796078f, 0.678431f, 1),
+                    Columns =
+                    {
+                        new MenuCell(rowIndex, 120)
+                        {
+                            Checkable = false,
+                            GetText = () => { return CrossHairModel.Radius.ToString(" 0.00000000;-0.00000000", CultureInfo.InvariantCulture); }
+                        }
+                    }
+                },
+                new MenuRow(++rowIndex, "WRITE", 120) //step
+                {
+                    BackColor = new RawColor4(0.97255f, 0.796078f, 0.678431f, 1),
+                    Columns =
+                    {
+                        new MenuCell(rowIndex, 120)
+                        {
+                            Checkable = false,
+                            GetText = () => { return null; }
+                        }
+                    }
+                },
                 new MenuRow(++rowIndex, "ADJ", 120) //step
                 {
                     BackColor = new RawColor4(0.97255f, 0.796078f, 0.678431f, 1),
@@ -864,7 +911,6 @@ namespace Undistort
                         }
                     }
                 },
-
             });
 
             foreach (var row in MenuRows)

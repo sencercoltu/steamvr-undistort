@@ -20,6 +20,8 @@ namespace Undistort
         private static VertexBufferBinding vertexBufferBinding;
         private static Shader shader;
 
+        public static float Radius;
+
 
         public static void Init(SharpDX.Direct3D11.Device device)
         {
@@ -28,7 +30,8 @@ namespace Undistort
                 new InputElement("POSITION", 0, Format.R32G32_Float, 0)
             });
 
-            ModifyCircles(device, 0.1f);
+            Radius = 0.1f;
+            ModifyCircles(device, 0);
         }        
 
         public static void Render(DeviceContext context, EVREye eye)
@@ -39,15 +42,19 @@ namespace Undistort
             context.Draw(vertices.Length / 2, 0);
         }
 
-        public static void ModifyCircles(SharpDX.Direct3D11.Device device, float radius)
+        public static void ModifyCircles(SharpDX.Direct3D11.Device device, float adj)
         {
-            if (radius > 1.0f) radius = 1.0f;
-            if (radius < 0.01f) radius = 0.01f;
+            Radius += adj;
+            if (Radius > 1.0f) Radius = 1.0f;
+            if (Radius < 0.01f) Radius = 0.01f;
+
+            
+
             var verticesList = new List<float>();
 
             verticesList.AddRange(new float[] { -1f, 0f, 1f, 0f, 0f, -1f, 0f, 1f });
 
-            for (var r = 0.1; r < 1.0; r += radius)
+            for (var r = 0.1; r < 1.0; r += Radius)
             {
                 double px = 0.0;
                 double py = 0.0;
@@ -77,7 +84,6 @@ namespace Undistort
                 vertexBuffer.Dispose();
             vertexBuffer = SharpDX.Direct3D11.Buffer.Create(device, BindFlags.VertexBuffer, vertices);
             vertexBufferBinding = new VertexBufferBinding(vertexBuffer, sizeof(float) * 2, 0);
-
 
         }
 
