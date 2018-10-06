@@ -63,6 +63,7 @@
     <Compile Include="..\OpenVR\headers\openvr_api.cs">
       <Link>openvr_api.cs</Link>
     </Compile>
+    <Compile Include="PointerModel.cs" />
     <Compile Include="AdjustmentPanelModel.cs" />
     <Compile Include="CrossHairModel.cs" />
     <Compile Include="FastJson.cs" />

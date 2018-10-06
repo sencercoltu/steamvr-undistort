@@ -607,6 +607,7 @@ namespace Undistort
 
                     AdjustmentPanelModel.Init(d3dDevice);
                     CrossHairModel.Init(d3dDevice);
+                    PointerModel.Init(d3dDevice);
                     AdjustCenter(0, 0, 0, 0);
 
                     hmaShader = new Shader(d3dDevice, "HiddenMesh_VS", "HiddenMesh_PS", new InputElement[]
@@ -643,8 +644,12 @@ namespace Undistort
                     {
                         while (vrSystem.PollNextEvent(ref vrEvent, eventSize))
                         {
+                            //Debug.WriteLine("VR Event: " + (EVREventType)vrEvent.eventType);
                             switch ((EVREventType)vrEvent.eventType)
                             {
+                                case EVREventType.VREvent_IpdChanged:
+                                    //modify projection??
+                                    break;
                                 case EVREventType.VREvent_PropertyChanged:
                                     {
                                         QueryDevices();
@@ -1187,6 +1192,8 @@ namespace Undistort
             d3dDeviceContext.OutputMerger.SetBlendState(null);
             d3dDeviceContext.OutputMerger.SetDepthStencilState(ControllerDepthStencilState);
             Matrix controllerMat = default(Matrix);
+            var hasLeft = false;
+            var hasRight = false;
             foreach (var controllerId in controllerIDs)
             {
                 if (controllers[controllerId] == ETrackedControllerRole.Invalid)
@@ -1199,17 +1206,41 @@ namespace Undistort
                     Convert(ref currentPoses[controllerId].mDeviceToAbsoluteTracking, ref controllerMat);
 
                     vertexShaderData.WorldViewProj = controllerMat * Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;
+
+                    if (AdjustmentPanelModel.Show && controllerRole == ETrackedControllerRole.LeftHand)
+                    {
+                        AdjustmentPanelModel.WVP = vertexShaderData.WorldViewProj;                        
+                        hasLeft = true;
+                    }
+                    if (controllerRole == ETrackedControllerRole.RightHand)
+                    {
+                        PointerModel.WVP = vertexShaderData.WorldViewProj;                        
+                        hasRight = true;
+                    }
+
                     vertexShaderData.WorldViewProj.Transpose();
                     d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
 
                     environmentShader.Apply(d3dDeviceContext); //back 
                     controllerModel.Render(d3dDeviceContext);
-
-                    //attach panel to left controller
-                    if (AdjustmentPanelModel.Show && controllerRole == ETrackedControllerRole.LeftHand)
-                        AdjustmentPanelModel.Render(d3dDeviceContext);
                 }
             }
+
+            if (hasRight)
+            {
+                vertexShaderData.WorldViewProj = PointerModel.WVP;
+                vertexShaderData.WorldViewProj.Transpose();
+                d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+                PointerModel.Render(d3dDeviceContext);
+            }
+            if (hasLeft)
+            {
+                vertexShaderData.WorldViewProj = AdjustmentPanelModel.WVP;
+                vertexShaderData.WorldViewProj.Transpose();
+                d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+                AdjustmentPanelModel.Render(d3dDeviceContext);
+            }
+
 
             if (RenderHiddenMesh /*&& IsEyeActive(eye.Eye)*/)
             {
@@ -1234,7 +1265,7 @@ namespace Undistort
             var shaderView = eye.ShaderView;
 
             if (pixelShaderData.Undistort)
-            {
+            {                
                 //render and undistort         
                 texView = UndistortTextureView;
                 shaderView = UndistortShaderView;

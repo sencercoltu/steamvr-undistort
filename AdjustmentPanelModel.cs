@@ -1,4 +1,5 @@
-﻿using SharpDX.Direct2D1;
+﻿using SharpDX;
+using SharpDX.Direct2D1;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using SharpDX.DirectWrite;
@@ -17,11 +18,15 @@ namespace Undistort
 {
     public static class AdjustmentPanelModel
     {
-        private static float[] vertices;
-        private static SharpDX.Direct3D11.Buffer vertexBuffer;
-        private static SharpDX.Direct3D11.Buffer indexBuffer;
-        private static VertexBufferBinding vertexBufferBinding;
-        private static Shader shader;
+        private static float[] panelVertices;
+        private static SharpDX.Direct3D11.Buffer panelVertexBuffer;
+        private static SharpDX.Direct3D11.Buffer panelIndexBuffer;
+        private static VertexBufferBinding panelVertexBufferBinding;
+
+        private static SharpDX.Direct3D11.Buffer pointerVertexBuffer;
+        private static VertexBufferBinding pointerVertexBufferBinding;
+
+        private static Shader panelShader;
 
         private static Texture2D texture;
         private static ShaderResourceView textureView;
@@ -29,7 +34,7 @@ namespace Undistort
         private static RenderTarget textRenderTarget;
         private static TextFormat textFormat;
         //private static TextFormat headerTextFormat;
-        private static SolidColorBrush blackBrush;        
+        private static SolidColorBrush blackBrush;
         private static SolidColorBrush selectedItemBrush;
 
         //private static EyeData eye;
@@ -42,7 +47,7 @@ namespace Undistort
 
         public class IconArea
         {
-            public string Type= "L";
+            public string Type = "L";
             public PointF Location;
         }
 
@@ -62,7 +67,7 @@ namespace Undistort
                         textRenderTarget.DrawBitmap(LockedIcon, area, 1.0f, BitmapInterpolationMode.Linear);
                     else if (point.Type == "V" && IsColorVisible != null)
                     {
-                        textRenderTarget.DrawBitmap(IsColorVisible()? ShownIcon : HiddenIcon, area, 1.0f, BitmapInterpolationMode.Linear);                            
+                        textRenderTarget.DrawBitmap(IsColorVisible() ? ShownIcon : HiddenIcon, area, 1.0f, BitmapInterpolationMode.Linear);
                     }
                 }
             }
@@ -137,7 +142,7 @@ namespace Undistort
         static AdjustmentPanelModel()
         {
             ButtonTimer = new System.Timers.Timer(TimerDelay)
-            {                
+            {
                 AutoReset = false,
                 Enabled = false
             };
@@ -418,7 +423,7 @@ namespace Undistort
                     switch (b)
                     {
                         case "T":
-                            RenderFlags ^= RenderFlag.RenderRed;                            
+                            RenderFlags ^= RenderFlag.RenderRed;
                             break;
                     }
                 },
@@ -479,7 +484,7 @@ namespace Undistort
             {
                 OnToggle = () => { },
                 IsActive = () => { return true; },
-                OnButtonPressed = (b) => 
+                OnButtonPressed = (b) =>
                 {
                     switch (b)
                     {
@@ -939,12 +944,12 @@ namespace Undistort
 
         public static SharpDX.Direct2D1.Bitmap LoadFromResource(System.Drawing.Bitmap bitmap)
         {
-        var sourceArea = new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height);
-        var bitmapProperties = new BitmapProperties(new PixelFormat(Format.R8G8B8A8_UNorm, SharpDX.Direct2D1.AlphaMode.Premultiplied));
-        var size = new SharpDX.Size2(bitmap.Width, bitmap.Height);
+            var sourceArea = new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height);
+            var bitmapProperties = new BitmapProperties(new PixelFormat(Format.R8G8B8A8_UNorm, SharpDX.Direct2D1.AlphaMode.Premultiplied));
+            var size = new SharpDX.Size2(bitmap.Width, bitmap.Height);
 
-        // Transform pixels from BGRA to RGBA
-        int stride = bitmap.Width * sizeof(int);
+            // Transform pixels from BGRA to RGBA
+            int stride = bitmap.Width * sizeof(int);
             using (var tempStream = new SharpDX.DataStream(bitmap.Height * stride, true, true))
             {
                 // Lock System.Drawing.Bitmap
@@ -972,11 +977,91 @@ namespace Undistort
             }
         }
 
+        public static Matrix WVP = Matrix.Zero;        
+
+        public static bool CheckBounds(ref Ray ray, out float depth)
+        {
+            var rayLength = (ray.Direction - ray.Position).Length();
+
+            var p0 = (Matrix.Translation(panelVertices[0], panelVertices[1], panelVertices[2]) * WVP).TranslationVector;
+            var p1 = (Matrix.Translation(panelVertices[5], panelVertices[6], panelVertices[7]) * WVP).TranslationVector;
+            var p2 = (Matrix.Translation(panelVertices[10], panelVertices[11], panelVertices[12]) * WVP).TranslationVector;
+            var p3 = (Matrix.Translation(panelVertices[15], panelVertices[16], panelVertices[17]) * WVP).TranslationVector;
+
+            Vector3 point;
+            if (SharpDX.Collision.RayIntersectsTriangle(ref ray, ref p0, ref p2, ref p3, out point))
+            {                
+                var collLength = (point - ray.Position).Length();
+                depth = (collLength / rayLength);
+                var f1 = p0 - point;
+                var f2 = p2 - point;
+                var f3 = p3 - point;
+                var a = Vector3.Cross(p0 - p2, p0 - p3).Length(); // main triangle area a
+                var a1 = Vector3.Cross(f2, f3).Length() / a; // p1's triangle area / a
+                var a2 = Vector3.Cross(f3, f1).Length() / a; // p2's triangle area / a 
+                var a3 = Vector3.Cross(f1, f2).Length() / a; // p3's triangle area / a
+
+                var uv = new Vector2(-1, -1) * a1 + new Vector2(1, 1) * a2 + new Vector2(-1, 1) * a3;
+                uv = (uv + 1) / 2;
+
+                var x = uv.X * Properties.Resources.InfoTable.Width;
+                var y = Properties.Resources.InfoTable.Height - (uv.Y * Properties.Resources.InfoTable.Height);
+
+                UpdateSelection(x, y);
+
+                return true;
+            }
+
+            if (SharpDX.Collision.RayIntersectsTriangle(ref ray, ref p0, ref p1, ref p2, out point))
+            {
+                var collLength = (point - ray.Position).Length();
+                depth = (collLength / rayLength);
+                var f1 = p0 - point;
+                var f2 = p1 - point;
+                var f3 = p2 - point;
+                var a = Vector3.Cross(p0 - p1, p0 - p2).Length(); // main triangle area a
+                var a1 = Vector3.Cross(f2, f3).Length() / a; // p1's triangle area / a
+                var a2 = Vector3.Cross(f3, f1).Length() / a; // p2's triangle area / a 
+                var a3 = Vector3.Cross(f1, f2).Length() / a; // p3's triangle area / a
+
+                var uv = new Vector2(-1, -1) * a1 + new Vector2(1, -1) * a2 + new Vector2(1, 1) * a3;
+                uv = (uv + 1) / 2;
+                var x = uv.X * Properties.Resources.InfoTable.Width;
+                var y = Properties.Resources.InfoTable.Height - (uv.Y * Properties.Resources.InfoTable.Height);
+
+                UpdateSelection(x, y);
+
+                return true;
+            }
+
+            
+
+            depth = 0;
+            return false;
+        }
+
+        private static void UpdateSelection(float x, float y)
+        {
+            foreach (var row in MenuRows)
+            {
+                if (y >= row.SelectionRect.Top && y <= row.SelectionRect.Bottom)
+                {
+                    if (SelectedCell != row.Columns[0])
+                    {
+                        SelectedCell = row.Columns[0];
+                        NeedsTableRedraw = true;
+
+                    }
+                    return;
+                }
+            }
+        }
+
         public static void Init(SharpDX.Direct3D11.Device device)
         {
             //eye = attachedSide;
 
-            shader = new Shader(device, "Info_VS", "Info_PS", new[]
+            panelShader = new Shader(device, "Info_VS", "Info_PS", new[]
             {
                 new SharpDX.Direct3D11.InputElement("POSITION", 0, Format.R32G32B32_Float, 0, 0),
                 new SharpDX.Direct3D11.InputElement("TEXCOORD", 0, Format.R32G32_Float, 12, 0)
@@ -985,7 +1070,7 @@ namespace Undistort
             var aspect = (float)Properties.Resources.InfoTable.Width / (float)Properties.Resources.InfoTable.Height;
             aspect /= leftEye.DistortionData.Aspect;
 
-            vertices = new float[] {
+            panelVertices = new float[] {
                 -0.2f * aspect, 0.05f, 0f, 0, 1, //0
                 0.2f * aspect, 0.05f, 0f, 1, 1, //1
                 0.2f * aspect, 0.25f, -0.25f, 1, 0, //2
@@ -994,9 +1079,9 @@ namespace Undistort
 
             var indices = new int[] { 0, 2, 3, 0, 1, 2 };
 
-            indexBuffer = SharpDX.Direct3D11.Buffer.Create(device, BindFlags.IndexBuffer, indices);
-            vertexBuffer = SharpDX.Direct3D11.Buffer.Create(device, BindFlags.VertexBuffer, vertices);
-            vertexBufferBinding = new VertexBufferBinding(vertexBuffer, sizeof(float) * 5, 0);
+            panelIndexBuffer = SharpDX.Direct3D11.Buffer.Create(device, BindFlags.IndexBuffer, indices);
+            panelVertexBuffer = SharpDX.Direct3D11.Buffer.Create(device, BindFlags.VertexBuffer, panelVertices);
+            panelVertexBufferBinding = new VertexBufferBinding(panelVertexBuffer, sizeof(float) * 5, 0);
 
             Texture2DDescription textureDesc = new Texture2DDescription
             {
@@ -1040,20 +1125,25 @@ namespace Undistort
             //headerTextFormat = new TextFormat(directWriteFactory, "Courier New", FontWeight.Bold, SharpDX.DirectWrite.FontStyle.Normal, 20.0f);
             //headerTextFormat.ParagraphAlignment = ParagraphAlignment.Center;
             //headerTextFormat.TextAlignment = TextAlignment.Leading;
-            blackBrush = new SolidColorBrush(textRenderTarget, SharpDX.Color4.Black);            
+            blackBrush = new SolidColorBrush(textRenderTarget, SharpDX.Color4.Black);
             selectedItemBrush = new SolidColorBrush(textRenderTarget, new SharpDX.Color4(1.0f, 1.0f, 0.0f, 0.5f));
+
+
+            var vertices = new float[] { -1f, 0f };
+            pointerVertexBuffer = SharpDX.Direct3D11.Buffer.Create(device, BindFlags.VertexBuffer, vertices);
+            pointerVertexBufferBinding = new VertexBufferBinding(pointerVertexBuffer, sizeof(float) * 2, 0);
 
             InitTable();
         }
 
         public static void Render(SharpDX.Direct3D11.DeviceContext context)
         {
-            
+
             if (NeedsTableRedraw) //very slow, only redraw if needed
             {
                 NeedsTableRedraw = false;
                 textRenderTarget.BeginDraw();
-                
+
                 textRenderTarget.DrawBitmap(InfoTable, 1.0f, BitmapInterpolationMode.NearestNeighbor);
 
                 foreach (var row in MenuRows)
@@ -1069,13 +1159,13 @@ namespace Undistort
                 }
 
 
-                textRenderTarget.EndDraw(out long tag1, out long tag2);                
+                textRenderTarget.EndDraw(out long tag1, out long tag2);
             }
 
-            shader.Apply(context);
+            panelShader.Apply(context);
             context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
-            context.InputAssembler.SetVertexBuffers(0, vertexBufferBinding);
-            context.InputAssembler.SetIndexBuffer(indexBuffer, Format.R32_UInt, 0);
+            context.InputAssembler.SetVertexBuffers(0, panelVertexBufferBinding);
+            context.InputAssembler.SetIndexBuffer(panelIndexBuffer, Format.R32_UInt, 0);
             context.PixelShader.SetShaderResource(0, textureView);
             context.DrawIndexed(6, 0, 0);
         }
@@ -1101,14 +1191,14 @@ namespace Undistort
                             break;
                         case "U":
                             if (SelectedCell != null)
-                            {                                
+                            {
                                 while (prevSelected.Row.ActionGroup == SelectedCell.Row.ActionGroup)
                                 {
                                     var rowidx = SelectedCell.RowIndex;
                                     rowidx--;
                                     if (rowidx < 0)
                                         return;
-                                    SelectedCell = MenuRows[rowidx].Columns[0];                                    
+                                    SelectedCell = MenuRows[rowidx].Columns[0];
                                 }
                                 SelectedCell.Row.IsFocused = true;
                                 if (prevSelected != null && prevSelected != SelectedCell) prevSelected.Row.IsFocused = false;
@@ -1132,8 +1222,8 @@ namespace Undistort
                     }
                     break;
                 case ETrackedControllerRole.RightHand:
-                    if ( button == "T")
-                        ShowOriginalValue = true;                    
+                    if (button == "T")
+                        ShowOriginalValue = true;
                     switch (button)
                     {
                         case "L":
@@ -1152,7 +1242,7 @@ namespace Undistort
                                 {
                                     TimerButton = button;
                                     TimerDelay = 1000;
-                                    ButtonTimer.Interval = TimerDelay;                                    
+                                    ButtonTimer.Interval = TimerDelay;
                                     ButtonTimer.Start();
                                 }
 
@@ -1163,7 +1253,7 @@ namespace Undistort
                             break;
                     }
                     break;
-            }            
+            }
             NeedsTableRedraw = true;
         }
 

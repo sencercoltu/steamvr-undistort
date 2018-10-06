@@ -86,6 +86,16 @@ float4 Model_PS(MODEL_PS_IN input) : SV_Target
 	return color;
 }
 
+float4 Pointer_VS(float3 position : POSITION) : SV_POSITION
+{
+	float4 pos = mul(float4(position, 1), WorldViewProj);
+	return pos;	 
+}
+
+float4 Pointer_PS(float4 position : SV_POSITION) : SV_Target
+{
+   return float4(0.0, 0.0, 1.0, 1.0f);
+}
 
 float4 CrossHair_VS(float2 position : POSITION) : SV_POSITION
 {
