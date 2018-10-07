@@ -470,7 +470,7 @@ namespace Undistort
             });
             Actions.Add("RESET", new ActionGroup
             {
-                OnToggle = () => { ResetActiveValues(); },
+                OnToggle = () => { ResetToOriginalValues(); },
                 IsActive = () => { return true; },
                 OnButtonPressed = (b) => { },
             });
@@ -499,7 +499,7 @@ namespace Undistort
             });
             Actions.Add("WRITE", new ActionGroup
             {
-                OnToggle = () => { SaveParameters(); },
+                OnToggle = () => { SaveSettings(); },
                 IsActive = () => { return true; },
                 OnButtonPressed = (b) => { },
             });
@@ -1050,7 +1050,6 @@ namespace Undistort
                     {
                         SelectedCell = row.Columns[0];
                         NeedsTableRedraw = true;
-
                     }
                     return;
                 }
@@ -1067,14 +1066,14 @@ namespace Undistort
                 new SharpDX.Direct3D11.InputElement("TEXCOORD", 0, Format.R32G32_Float, 12, 0)
             });
 
-            var aspect = (float)Properties.Resources.InfoTable.Width / (float)Properties.Resources.InfoTable.Height;
-            aspect /= leftEye.DistortionData.Aspect;
+            var panelAspect = (float)Properties.Resources.InfoTable.Width / (float)Properties.Resources.InfoTable.Height;
+            panelAspect /= leftEye.DistortionData.Aspect;
 
             panelVertices = new float[] {
-                -0.2f * aspect, 0.05f, 0f, 0, 1, //0
-                0.2f * aspect, 0.05f, 0f, 1, 1, //1
-                0.2f * aspect, 0.25f, -0.25f, 1, 0, //2
-                -0.2f * aspect, 0.25f, -0.25f, 0, 0//3
+                -0.2f * panelAspect, 0.05f, 0f, 0, 1, //0
+                0.2f * panelAspect, 0.05f, 0f, 1, 1, //1
+                0.2f * panelAspect, 0.25f, -0.25f, 1, 0, //2
+                -0.2f * panelAspect, 0.25f, -0.25f, 0, 0//3
             };
 
             var indices = new int[] { 0, 2, 3, 0, 1, 2 };
@@ -1100,8 +1099,8 @@ namespace Undistort
             texture = new Texture2D(device, textureDesc);
             textureView = new ShaderResourceView(device, texture);
 
-            var dxgiDevice = device.QueryInterface<SharpDX.DXGI.Device>();
-            var d2DDevice = new SharpDX.Direct2D1.Device(dxgiDevice);
+            //var dxgiDevice = device.QueryInterface<SharpDX.DXGI.Device>();
+            //var d2DDevice = new SharpDX.Direct2D1.Device(dxgiDevice);
             var surface = texture.QueryInterface<Surface>();
             var d2DContext = new SharpDX.Direct2D1.DeviceContext(surface);
             var directWriteFactory = new SharpDX.DirectWrite.Factory();
@@ -1144,7 +1143,7 @@ namespace Undistort
                 NeedsTableRedraw = false;
                 textRenderTarget.BeginDraw();
 
-                textRenderTarget.DrawBitmap(InfoTable, 1.0f, BitmapInterpolationMode.NearestNeighbor);
+                textRenderTarget.DrawBitmap(InfoTable, 1.0f, BitmapInterpolationMode.Linear); //super slow, put on 2nd texture and prevent redraw
 
                 foreach (var row in MenuRows)
                 {

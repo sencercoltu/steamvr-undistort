@@ -8,7 +8,8 @@ cbuffer vertexConstBuffer : register(b0)
 
 cbuffer pixelConstBuffer : register(b1)
 {	
-	float4 LightPos;	
+	float3 LightPos;	
+	float Persistence;
 
 	bool Undistort;
 	bool Wireframe;
@@ -72,7 +73,7 @@ float4 Model_PS(MODEL_PS_IN input) : SV_Target
 	float4 color = float4(1, 1, 1, 1); 
 	if (!Wireframe || Controller)
 	{	
-		float3 L = normalize(LightPos.xyz - input.worldPos);
+		float3 L = normalize(LightPos - input.worldPos);
 		float3 N = normalize(input.normal);
 		float3 diffuseTex = diffuseTexture.Sample(diffuseSampler, input.uv).xyz;
 		float3 diffuse = diffuseTex * saturate(dot(N,L));
@@ -97,16 +98,30 @@ float4 Pointer_PS(float4 position : SV_POSITION) : SV_Target
    return float4(0.0, 0.0, 1.0, 1.0f);
 }
 
-float4 CrossHair_VS(float2 position : POSITION) : SV_POSITION
+struct CrossHair_VS_IN
 {
-	//return float4(position, 1.0f, 1.0f);
-	//return mul(float4(position, 1.0f, 1.0f), PlainProjection);
-	return float4(float2(position.x - ActiveEyeCenter.x, (position.y - ActiveEyeCenter.y) / ActiveAspect), 1.0f, 1.0f); //put a bit away from eye
+	float3 pos : POSITION;
+	float3 color : COLOR;	
+};
+
+struct CrossHair_PS_IN
+{
+	float4 pos : SV_POSITION;		
+	float4 color : COLOR;
+};
+
+CrossHair_PS_IN CrossHair_VS(CrossHair_VS_IN input)
+{
+	CrossHair_PS_IN output = (CrossHair_PS_IN)0;
+	output.pos = mul(float4(input.pos, 1), WorldViewProj);
+	//output.pos = float4(float2(input.pos.x - ActiveEyeCenter.x, (input.pos.y - ActiveEyeCenter.y) / ActiveAspect), input.pos.z, 1.0f);
+	output.color = float4(input.color, 1);
+	return output;
 }
 
-float4 CrossHair_PS(float4 position : SV_POSITION) : SV_Target
+float4 CrossHair_PS(CrossHair_PS_IN input) : SV_Target
 {
-   return float4(0.0, 1.0, 0.0, 0.5f);
+   return input.color;
 }
 
 struct INFO_VS_IN
@@ -181,37 +196,39 @@ Undistort_PS_IN Undistort_VS(Undistort_VS_IN input)
 float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 {	
 	float scale = 1.0 + GrowToUndistort;	
+	float aspect = Aspect;
 
 	float2 UV = (input.uv * 2) - 1;	//convert [0;1] to [-1;1]	
-	UV.y *= Aspect;
-		
+	UV.y *= aspect;
+	
 	float2 center = RedCenter.xy;	
-	center.y *= Aspect;
+	center.y *= aspect;
 	float2 ruv = UV - center;
 	float rr2 = dot(ruv, ruv);		
 	float rk = 1.0 / (RedCoeffs.w + RedCoeffs.x * rr2 + RedCoeffs.y * rr2 * rr2 + RedCoeffs.z * rr2 * rr2 * rr2);	
 	ruv = (ruv * rk + center) / scale;
-	ruv.y /= Aspect;
+	ruv.y /= aspect;
 	ruv = (ruv + 1) / 2; //convert [-1;1] back to [0;1]
 	float R = diffuseTexture.Sample(diffuseSampler, ruv).r;
-
+		
+	
 	center = GreenCenter.xy;
-	center.y *= Aspect;
+	center.y *= aspect;
 	float2 guv = UV - center;	
 	float gr2 = dot(guv, guv);
 	float gk = 1.0 / (GreenCoeffs.w + GreenCoeffs.x * gr2 + GreenCoeffs.y * gr2 * gr2 + GreenCoeffs.z * gr2 * gr2 * gr2);
 	guv = (guv * gk + center) / scale;
-	guv.y /= Aspect;
+	guv.y /= aspect;
 	guv = (guv + 1) / 2;
 	float G = diffuseTexture.Sample(diffuseSampler, guv).g;
-	
+
 	center = BlueCenter.xy;	
-	center.y *= Aspect;
+	center.y *= aspect;
 	float2 buv = UV - center;		
-	float br2 = dot(buv, buv);
+	float br2 = dot(buv, buv) + Persistence;
 	float bk = 1.0 / (BlueCoeffs.w + BlueCoeffs.x * br2 + BlueCoeffs.y * br2 * br2 + BlueCoeffs.z * br2 * br2 * br2);	
 	buv = (buv * bk + center) / scale;
-	buv.y /= Aspect;
+	buv.y /= aspect;
 	buv = (buv + 1) / 2;
 	float B = diffuseTexture.Sample(diffuseSampler, buv).b;
 

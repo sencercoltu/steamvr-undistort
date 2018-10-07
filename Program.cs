@@ -32,7 +32,8 @@ namespace Undistort
 
         public struct PixelShaderData
         {
-            public Vector4 LightPosition;
+            public Vector3 LightPosition;
+            public float Persistence;
             private int _Undistort; //bool is 1 byte inside struct, we use int to convert to 4 bytes and use getter setter
             public bool Undistort { get { return _Undistort == 1; } set { _Undistort = value ? 1 : 0; } }
             private int _Wireframe;
@@ -128,12 +129,10 @@ namespace Undistort
 
         public static SharpDX.Direct3D11.Buffer BackBufferIndexBuffer;
 
-        private static int RenderMode = 0;
+        public static int RenderMode = 0;
 
         public class EyeData
         {
-            public const float Width = 1080f;
-            public const float Height = 1200f;
             public const float Near = 0.01f;
             public const float Far = 1000f;
 
@@ -145,7 +144,8 @@ namespace Undistort
             }
 
             public EVREye Eye;
-            public Size FrameSize;
+            public SizeF PanelSize;
+            public SizeF FrameSize;
             public IDictionary<string, object> Json;
             public Matrix OriginalProjection;
             public Matrix EyeToHeadView;
@@ -192,19 +192,19 @@ namespace Undistort
 
             public void UpdateIntrinsicsFromFocusAndCenter()
             {
-                DistortionData.Intrinsics.M11 = 2.0f * DistortionData.FocalX / Width;
+                DistortionData.Intrinsics.M11 = 2.0f * DistortionData.FocalX / PanelSize.Width;
                 DistortionData.Intrinsics.M31 = DistortionData.EyeCenter.X;
-                DistortionData.Intrinsics.M22 = 2.0f * DistortionData.FocalY / Height;
+                DistortionData.Intrinsics.M22 = 2.0f * DistortionData.FocalY / PanelSize.Height;
                 DistortionData.Intrinsics.M32 = DistortionData.EyeCenter.Y;
             }
 
             public void CalcFocusCenterAspect()
             {
-                DistortionData.FocalX = Width / 2 * DistortionData.Intrinsics.M11;
-                DistortionData.FocalY = Height / 2 * DistortionData.Intrinsics.M22;
+                DistortionData.FocalX = PanelSize.Width / 2 * DistortionData.Intrinsics.M11;
+                DistortionData.FocalY = PanelSize.Height / 2 * DistortionData.Intrinsics.M22;
                 DistortionData.EyeCenter.X = DistortionData.Intrinsics.M31;
                 DistortionData.EyeCenter.Y = DistortionData.Intrinsics.M32;
-                DistortionData.Aspect = DistortionData.Intrinsics.M11 / DistortionData.Intrinsics.M22;
+                DistortionData.Aspect = 1.0f / ScreenAspect; // DistortionData.Intrinsics.M11 / DistortionData.Intrinsics.M22;
             }
 
             public Matrix GetProjectionFromIntrinsics()
@@ -230,8 +230,8 @@ namespace Undistort
         }
 
 
-        public static EyeData leftEye = new EyeData(EVREye.Eye_Left);
-        public static EyeData rightEye = new EyeData(EVREye.Eye_Right);
+        public static EyeData leftEye;
+        public static EyeData rightEye;
 
 
         private static Model environmentModel;
@@ -278,6 +278,10 @@ namespace Undistort
         public static string OvrPath;
         private static RenderForm MainForm;
 
+        private static uint ScreenWidth;
+        private static uint ScreenHeight;
+        public static float ScreenAspect;
+
         [STAThread]
         private static void Main()
         {
@@ -308,22 +312,22 @@ namespace Undistort
 
             controllers = new Dictionary<uint, ETrackedControllerRole>();
 
-            uint width = (uint)EyeData.Width;
-            uint height = (uint)EyeData.Height;
+            vrSystem.GetRecommendedRenderTargetSize(ref ScreenWidth, ref ScreenHeight);
 
-            vrSystem.GetRecommendedRenderTargetSize(ref width, ref height);
+            //update aspect with recommended sizes
+            ScreenAspect = (float)ScreenWidth / (float)ScreenHeight;
 
-            leftEye.FrameSize = rightEye.FrameSize = new Size((int)width, (int)height);
-            width *= 2;
+            leftEye.FrameSize = rightEye.FrameSize = new Size((int)ScreenWidth, (int)ScreenHeight);
+            ScreenWidth *= 2;
 
             //scale down proportionally to fit
-            while (width > Screen.PrimaryScreen.Bounds.Width || height > Screen.PrimaryScreen.Bounds.Height)
+            while (ScreenWidth > Screen.PrimaryScreen.Bounds.Width || ScreenHeight > Screen.PrimaryScreen.Bounds.Height)
             {
-                width /= 2;
-                height /= 2;
+                ScreenWidth /= 2;
+                ScreenHeight /= 2;
             }
 
-            WindowSize = new Size((int)width, (int)height);
+            WindowSize = new Size((int)ScreenWidth, (int)ScreenHeight);
 
             leftEye.OriginalProjection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Left, EyeData.Near, EyeData.Far));
             rightEye.OriginalProjection = Convert(vrSystem.GetProjectionMatrix(EVREye.Eye_Right, EyeData.Near, EyeData.Far));
@@ -360,7 +364,7 @@ namespace Undistort
                                 ToggleDistortion();
                                 break;
                             case Keys.PageUp:
-                                ToggleWireFrame();
+                                ChangeRenderMode();
                                 break;
                             case Keys.Escape:
                                 MainForm.Close();
@@ -481,8 +485,8 @@ namespace Undistort
                         BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
                         CpuAccessFlags = CpuAccessFlags.None,
                         Format = Format.B8G8R8A8_UNorm,
-                        Width = leftEye.FrameSize.Width,
-                        Height = leftEye.FrameSize.Height,
+                        Width = (int)leftEye.FrameSize.Width,
+                        Height = (int)leftEye.FrameSize.Height,
                         MipLevels = 1,
                         OptionFlags = ResourceOptionFlags.None,
                         SampleDescription = new SampleDescription(1, 0),
@@ -537,7 +541,7 @@ namespace Undistort
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\928165436\spacecpod\spacecpod.obj";
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\716774474\VertigoRoom\VertigoRoom.obj";
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\686754013\holochamber\holochamber.obj";
-                    //var fileName = ovrPath + @"..\..\workshop\content\250820\717646476\TheCube\TheCube.obj";
+                    //var fileName = OvrPath + @"..\..\workshop\content\250820\717646476\TheCube\TheCube.obj";
                     var fileName = @"environment\environment.obj";
 
 
@@ -813,7 +817,6 @@ namespace Undistort
             rightEye.UpdateIntrinsicsFromFocusAndCenter();
         }
 
-
         public static void AdjustColorCenters(float xStep, float yStep)
         {
             if (RenderFlags.HasFlag(RenderFlag.Left))
@@ -909,7 +912,7 @@ namespace Undistort
             }
         }
 
-        public static void ToggleWireFrame()
+        public static void ChangeRenderMode()
         {
             RenderMode = (RenderMode + 1) % 3;
             pixelShaderData.Wireframe = (RenderMode == 1);
@@ -919,7 +922,6 @@ namespace Undistort
         {
             pixelShaderData.Undistort = !pixelShaderData.Undistort;
         }
-
 
         public static void AdjustFocus(float stepX, float stepY)
         {
@@ -951,7 +953,7 @@ namespace Undistort
             }
         }
 
-        public static void ResetActiveValues()
+        public static void ResetToOriginalValues()
         {
             if (RenderFlags.HasFlag(RenderFlag.Left))
             {
@@ -1020,7 +1022,7 @@ namespace Undistort
                                 ToggleDistortion();
                                 break;
                             case ETrackedControllerRole.RightHand:
-                                ToggleWireFrame();
+                                ChangeRenderMode();
                                 break;
                         }
                         break;
@@ -1132,10 +1134,11 @@ namespace Undistort
             d3dDeviceContext.Rasterizer.SetViewport(0, 0, eye.FrameSize.Width, eye.FrameSize.Height);
             d3dDeviceContext.OutputMerger.SetTargets(eye.DepthStencilView, eye.TextureView);
             d3dDeviceContext.ClearRenderTargetView(eye.TextureView, d3dClearColor);
-            d3dDeviceContext.ClearDepthStencilView(eye.DepthStencilView, DepthStencilClearFlags.Depth, 1.0f, 0);
+            d3dDeviceContext.ClearDepthStencilView(eye.DepthStencilView, DepthStencilClearFlags.Depth, 1, 0);
             d3dDeviceContext.OutputMerger.SetDepthStencilState(DepthStencilState);
             d3dDeviceContext.OutputMerger.SetBlendState(blendState);
             d3dDeviceContext.Rasterizer.State = pixelShaderData.Wireframe ? WireFrameRasterizerState : SolidRasteizerState;
+
             if (eye.Eye == EVREye.Eye_Left)
             {
                 d3dDeviceContext.UpdateSubresource(ref leftEye.DistortionData, coefficientConstantBuffer);
@@ -1151,7 +1154,8 @@ namespace Undistort
 
 
             environmentShader.Apply(d3dDeviceContext);
-            pixelShaderData.LightPosition = new Vector4(headMatrix.TranslationVector, 1);
+            pixelShaderData.LightPosition = headMatrix.TranslationVector;
+
 
             vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;
             vertexShaderData.WorldViewProj.Transpose();
@@ -1176,21 +1180,23 @@ namespace Undistort
             if (pixelShaderData.Wireframe) //revert            
                 d3dDeviceContext.Rasterizer.State = SolidRasteizerState;
 
-
-            if (pixelShaderData.Undistort)
-            {
-                //d3dDeviceContext.OutputMerger.SetBlendState(null);
-                d3dDeviceContext.OutputMerger.SetBlendState(blendState);
-                CrossHairModel.Render(d3dDeviceContext, eye.Eye);
-            }
-
-            //Render info panels
             pixelShaderData.ActiveColor = -1;
             pixelShaderData.Controller = true;
             d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
-
-            d3dDeviceContext.OutputMerger.SetBlendState(null);
             d3dDeviceContext.OutputMerger.SetDepthStencilState(ControllerDepthStencilState);
+            d3dDeviceContext.OutputMerger.SetBlendState(null);
+
+            if (pixelShaderData.Undistort || RenderMode != 0)
+            {
+                //vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView);
+                //vertexShaderData.WorldViewProj.M43 *= -1;
+                vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView) * projection;
+                vertexShaderData.WorldViewProj.Transpose();
+                d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+                CrossHairModel.Render(d3dDeviceContext);
+            }
+
+            //Render info panels
             Matrix controllerMat = default(Matrix);
             var hasLeft = false;
             var hasRight = false;
@@ -1209,12 +1215,12 @@ namespace Undistort
 
                     if (AdjustmentPanelModel.Show && controllerRole == ETrackedControllerRole.LeftHand)
                     {
-                        AdjustmentPanelModel.WVP = vertexShaderData.WorldViewProj;                        
+                        AdjustmentPanelModel.WVP = vertexShaderData.WorldViewProj;
                         hasLeft = true;
                     }
                     if (controllerRole == ETrackedControllerRole.RightHand)
                     {
-                        PointerModel.WVP = vertexShaderData.WorldViewProj;                        
+                        PointerModel.WVP = vertexShaderData.WorldViewProj;
                         hasRight = true;
                     }
 
@@ -1265,7 +1271,7 @@ namespace Undistort
             var shaderView = eye.ShaderView;
 
             if (pixelShaderData.Undistort)
-            {                
+            {
                 //render and undistort         
                 texView = UndistortTextureView;
                 shaderView = UndistortShaderView;
@@ -1376,7 +1382,7 @@ namespace Undistort
             return destination;
         }
 
-        public static void SaveParameters()
+        public static void SaveSettings()
         {
             if (MessageBox.Show(null, "Only upload configuration if you know what you are doing.\n(Did you backup your original config?)\nA backup of the input file will be created anyway.", "Confirm configuration upload.", MessageBoxButtons.OKCancel) == DialogResult.OK)
             {
@@ -1479,7 +1485,6 @@ namespace Undistort
                 CreateNoWindow = true,
                 FileName = toolPath,
                 WindowStyle = ProcessWindowStyle.Hidden
-
             };
             //MessageBox.Show("Running process " + toolPath + " " + processInfo.Arguments);
             var process = Process.Start(processInfo);
@@ -1489,9 +1494,22 @@ namespace Undistort
             File.WriteAllText(confPath, jsonData.Prettify());
             lightHouseConfigJson = FastJson.Deserialize<IDictionary<string, object>>(jsonData);
 
+            var deviceData = lightHouseConfigJson["device"] as IDictionary<string, object>;
+            ScreenWidth = (uint)System.Convert.ToDouble(deviceData["eye_target_width_in_pixels"]);
+            ScreenHeight = (uint)System.Convert.ToDouble(deviceData["eye_target_height_in_pixels"]);
+            ScreenAspect = (float)System.Convert.ToDouble(deviceData["physical_aspect_x_over_y"]);
+            pixelShaderData.Persistence = (float)System.Convert.ToDouble(deviceData["persistence"]);
+
+            leftEye = new EyeData(EVREye.Eye_Left);
+            rightEye = new EyeData(EVREye.Eye_Right);
+
+            leftEye.PanelSize.Width = rightEye.PanelSize.Width = ScreenWidth;
+            leftEye.PanelSize.Height = rightEye.PanelSize.Height = ScreenHeight;
+
             var transforms = lightHouseConfigJson["tracking_to_eye_transform"] as object[];
             leftEye.Json = (transforms[0]) as IDictionary<string, object>;
             rightEye.Json = (transforms[1]) as IDictionary<string, object>;
+
 
             LoadEyeSettings(leftEye);
             LoadEyeSettings(rightEye);
