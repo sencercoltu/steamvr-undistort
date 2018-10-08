@@ -44,6 +44,8 @@ namespace Undistort
         private static SharpDX.Color4 inactiveColor = new SharpDX.Color4(1, 0.666f, 0.784f, 1);
 
         private static System.Timers.Timer ButtonTimer;
+        private static string CurrLeftButton = "";
+        private static string CurrRightButton = "";
 
         public class IconArea
         {
@@ -1007,7 +1009,8 @@ namespace Undistort
                 var x = uv.X * Properties.Resources.InfoTable.Width;
                 var y = Properties.Resources.InfoTable.Height - (uv.Y * Properties.Resources.InfoTable.Height);
 
-                UpdateSelection(x, y);
+                if (CurrRightButton == "T")
+                    UpdateSelection(x, y);
 
                 return true;
             }
@@ -1029,7 +1032,8 @@ namespace Undistort
                 var x = uv.X * Properties.Resources.InfoTable.Width;
                 var y = Properties.Resources.InfoTable.Height - (uv.Y * Properties.Resources.InfoTable.Height);
 
-                UpdateSelection(x, y);
+                if (CurrRightButton == "T")
+                    UpdateSelection(x, y);
 
                 return true;
             }
@@ -1175,6 +1179,7 @@ namespace Undistort
             switch (role)
             {
                 case ETrackedControllerRole.LeftHand:
+                    CurrLeftButton = button;
                     switch (button)
                     {
                         case "G":
@@ -1221,6 +1226,7 @@ namespace Undistort
                     }
                     break;
                 case ETrackedControllerRole.RightHand:
+                    CurrRightButton = button;
                     if (button == "T")
                         ShowOriginalValue = true;
                     switch (button)
@@ -1261,7 +1267,11 @@ namespace Undistort
             var prevSelected = SelectedCell;
             switch (role)
             {
+                case ETrackedControllerRole.LeftHand:
+                    CurrLeftButton = "";
+                    break;
                 case ETrackedControllerRole.RightHand:
+                    CurrRightButton = "";
                     if (button == "U" || button == "D")
                     {
                         ButtonTimer.Stop();

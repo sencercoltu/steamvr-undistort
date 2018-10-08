@@ -34,8 +34,8 @@ namespace Undistort
         {
             public Vector3 LightPosition;
             public float Persistence;
-            private int _Undistort; //bool is 1 byte inside struct, we use int to convert to 4 bytes and use getter setter
-            public bool Undistort { get { return _Undistort == 1; } set { _Undistort = value ? 1 : 0; } }
+            public int _Undistort; //bool is 1 byte inside struct, we use int to convert to 4 bytes and use getter setter
+            public bool Undistort { get { return _Undistort > 0; } }
             private int _Wireframe;
             public bool Wireframe { get { return _Wireframe == 1; } set { _Wireframe = value ? 1 : 0; } }
             private int _Controller;
@@ -728,6 +728,7 @@ namespace Undistort
                         d3dDeviceContext.ClearRenderTargetView(BackBufferTextureView, d3dClearColor); // clear backbuffer once
                         d3dDeviceContext.ClearDepthStencilView(BackBufferDepthStencilView, DepthStencilClearFlags.Depth, 1.0f, 0);
 
+
                         #region Render LeftEye
                         RenderView(ref leftEye);
                         #endregion 
@@ -920,7 +921,10 @@ namespace Undistort
 
         public static void ToggleDistortion()
         {
-            pixelShaderData.Undistort = !pixelShaderData.Undistort;
+            pixelShaderData._Undistort++;
+            if (pixelShaderData._Undistort >= 3) pixelShaderData._Undistort = 0;
+            CrossHairModel.ModifyCircles(d3dDevice, 0);
+            //pixelShaderData.Undistort = !pixelShaderData.Undistort;
         }
 
         public static void AdjustFocus(float stepX, float stepY)
@@ -1139,158 +1143,162 @@ namespace Undistort
             d3dDeviceContext.OutputMerger.SetBlendState(blendState);
             d3dDeviceContext.Rasterizer.State = pixelShaderData.Wireframe ? WireFrameRasterizerState : SolidRasteizerState;
 
+            var render = true;
+            var texView = eye.TextureView;
+            var shaderView = eye.ShaderView;
+            
             if (eye.Eye == EVREye.Eye_Left)
             {
+                //if (!RenderFlags.HasFlag(RenderFlag.Left)) render = false;
                 d3dDeviceContext.UpdateSubresource(ref leftEye.DistortionData, coefficientConstantBuffer);
                 vertexShaderData.ActiveEyeCenter = leftEye.DistortionData.EyeCenter;
                 vertexShaderData.ActiveAspect = leftEye.DistortionData.Aspect;
             }
             else if (eye.Eye == EVREye.Eye_Right)
             {
+                //if (!RenderFlags.HasFlag(RenderFlag.Right)) render = false;
                 d3dDeviceContext.UpdateSubresource(ref rightEye.DistortionData, coefficientConstantBuffer);
                 vertexShaderData.ActiveEyeCenter = rightEye.DistortionData.EyeCenter;
                 vertexShaderData.ActiveAspect = rightEye.DistortionData.Aspect;
             }
 
-
-            environmentShader.Apply(d3dDeviceContext);
-            pixelShaderData.LightPosition = headMatrix.TranslationVector;
-
-
-            vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;
-            vertexShaderData.WorldViewProj.Transpose();
-            d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
-
-            //pixelShaderData.Intrinsics = Matrix.Invert(eye.CreateIntrinsics()); //pixelShaderData.Intrinsics.Transpose();            
-
-            if (RenderMode != 2)
+            if (render)
             {
-                for (int i = 0; i < 3; i++)
-                {
-                    if (i == 0 && !RenderFlags.HasFlag(RenderFlag.RenderRed)) continue;
-                    if (i == 1 && !RenderFlags.HasFlag(RenderFlag.RenderGreen)) continue;
-                    if (i == 2 && !RenderFlags.HasFlag(RenderFlag.RenderBlue)) continue;
-                    pixelShaderData.ActiveColor = i;
-                    pixelShaderData.Controller = false;
-                    d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
-                    environmentModel.Render(d3dDeviceContext);
-                }
-            }
+                environmentShader.Apply(d3dDeviceContext);
+                pixelShaderData.LightPosition = headMatrix.TranslationVector;
 
-            if (pixelShaderData.Wireframe) //revert            
-                d3dDeviceContext.Rasterizer.State = SolidRasteizerState;
 
-            pixelShaderData.ActiveColor = -1;
-            pixelShaderData.Controller = true;
-            d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
-            d3dDeviceContext.OutputMerger.SetDepthStencilState(ControllerDepthStencilState);
-            d3dDeviceContext.OutputMerger.SetBlendState(null);
-
-            if (pixelShaderData.Undistort || RenderMode != 0)
-            {
-                //vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView);
-                //vertexShaderData.WorldViewProj.M43 *= -1;
-                vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView) * projection;
+                vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;
                 vertexShaderData.WorldViewProj.Transpose();
                 d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
-                CrossHairModel.Render(d3dDeviceContext);
-            }
 
-            //Render info panels
-            Matrix controllerMat = default(Matrix);
-            var hasLeft = false;
-            var hasRight = false;
-            foreach (var controllerId in controllerIDs)
-            {
-                if (controllers[controllerId] == ETrackedControllerRole.Invalid)
-                    controllers[controllerId] = vrSystem.GetControllerRoleForTrackedDeviceIndex(controllerId);
+                //pixelShaderData.Intrinsics = Matrix.Invert(eye.CreateIntrinsics()); //pixelShaderData.Intrinsics.Transpose();            
 
-                var controllerRole = controllers[controllerId];
-
-                if (currentPoses[controllerId].bPoseIsValid)
+                if (RenderMode != 2)
                 {
-                    Convert(ref currentPoses[controllerId].mDeviceToAbsoluteTracking, ref controllerMat);
-
-                    vertexShaderData.WorldViewProj = controllerMat * Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;
-
-                    if (AdjustmentPanelModel.Show && controllerRole == ETrackedControllerRole.LeftHand)
+                    for (int i = 0; i < 3; i++)
                     {
-                        AdjustmentPanelModel.WVP = vertexShaderData.WorldViewProj;
-                        hasLeft = true;
+                        if (i == 0 && !RenderFlags.HasFlag(RenderFlag.RenderRed)) continue;
+                        if (i == 1 && !RenderFlags.HasFlag(RenderFlag.RenderGreen)) continue;
+                        if (i == 2 && !RenderFlags.HasFlag(RenderFlag.RenderBlue)) continue;
+                        pixelShaderData.ActiveColor = i;
+                        pixelShaderData.Controller = false;
+                        d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
+                        environmentModel.Render(d3dDeviceContext);
                     }
-                    if (controllerRole == ETrackedControllerRole.RightHand)
-                    {
-                        PointerModel.WVP = vertexShaderData.WorldViewProj;
-                        hasRight = true;
-                    }
+                }
 
+                if (pixelShaderData.Wireframe) //revert            
+                    d3dDeviceContext.Rasterizer.State = SolidRasteizerState;
+
+                pixelShaderData.ActiveColor = -1;
+                pixelShaderData.Controller = true;
+                d3dDeviceContext.UpdateSubresource(ref pixelShaderData, pixelConstantBuffer);
+                d3dDeviceContext.OutputMerger.SetDepthStencilState(ControllerDepthStencilState);
+                d3dDeviceContext.OutputMerger.SetBlendState(null);
+
+                if (pixelShaderData.Undistort || RenderMode != 0)
+                {
+                    //vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView);
+                    //vertexShaderData.WorldViewProj.M43 *= -1;
+                    vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView) * projection;
                     vertexShaderData.WorldViewProj.Transpose();
                     d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
-
-                    environmentShader.Apply(d3dDeviceContext); //back 
-                    controllerModel.Render(d3dDeviceContext);
+                    CrossHairModel.Render(d3dDeviceContext);
                 }
-            }
 
-            if (hasRight)
-            {
-                vertexShaderData.WorldViewProj = PointerModel.WVP;
-                vertexShaderData.WorldViewProj.Transpose();
-                d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
-                PointerModel.Render(d3dDeviceContext);
-            }
-            if (hasLeft)
-            {
-                vertexShaderData.WorldViewProj = AdjustmentPanelModel.WVP;
-                vertexShaderData.WorldViewProj.Transpose();
-                d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
-                AdjustmentPanelModel.Render(d3dDeviceContext);
-            }
+                //Render info panels
+                Matrix controllerMat = default(Matrix);
+                var hasLeft = false;
+                var hasRight = false;
+                foreach (var controllerId in controllerIDs)
+                {
+                    if (controllers[controllerId] == ETrackedControllerRole.Invalid)
+                        controllers[controllerId] = vrSystem.GetControllerRoleForTrackedDeviceIndex(controllerId);
+
+                    var controllerRole = controllers[controllerId];
+
+                    if (currentPoses[controllerId].bPoseIsValid)
+                    {
+                        Convert(ref currentPoses[controllerId].mDeviceToAbsoluteTracking, ref controllerMat);
+
+                        vertexShaderData.WorldViewProj = controllerMat * Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;
+
+                        if (AdjustmentPanelModel.Show && controllerRole == ETrackedControllerRole.LeftHand)
+                        {
+                            AdjustmentPanelModel.WVP = vertexShaderData.WorldViewProj;
+                            hasLeft = true;
+                        }
+                        if (controllerRole == ETrackedControllerRole.RightHand)
+                        {
+                            PointerModel.WVP = vertexShaderData.WorldViewProj;
+                            hasRight = true;
+                        }
+
+                        vertexShaderData.WorldViewProj.Transpose();
+                        d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+
+                        environmentShader.Apply(d3dDeviceContext); //back 
+                        controllerModel.Render(d3dDeviceContext);
+                    }
+                }
+
+                if (hasRight)
+                {
+                    vertexShaderData.WorldViewProj = PointerModel.WVP;
+                    vertexShaderData.WorldViewProj.Transpose();
+                    d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+                    PointerModel.Render(d3dDeviceContext);
+                }
+                if (hasLeft)
+                {
+                    vertexShaderData.WorldViewProj = AdjustmentPanelModel.WVP;
+                    vertexShaderData.WorldViewProj.Transpose();
+                    d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+                    AdjustmentPanelModel.Render(d3dDeviceContext);
+                }
 
 
-            if (RenderHiddenMesh /*&& IsEyeActive(eye.Eye)*/)
-            {
-                d3dDeviceContext.Rasterizer.State = pixelShaderData.Wireframe ? ncWireFrameRasterizerState : ncRasterizerState;
-                //render hidden mesh area just for control distortion area
-                //vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;
-                //vertexShaderData.WorldViewProj.Transpose();
-                //d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+                if (RenderHiddenMesh /*&& IsEyeActive(eye.Eye)*/)
+                {
+                    d3dDeviceContext.Rasterizer.State = pixelShaderData.Wireframe ? ncWireFrameRasterizerState : ncRasterizerState;
+                    //render hidden mesh area just for control distortion area
+                    //vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;
+                    //vertexShaderData.WorldViewProj.Transpose();
+                    //d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
 
 
+                    d3dDeviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
+                    hmaVertexBufferBinding = new VertexBufferBinding(eye.HiddenAreaMeshVertexBuffer, sizeof(float) * 2, 0);
+                    d3dDeviceContext.InputAssembler.SetVertexBuffers(0, hmaVertexBufferBinding);
+                    hmaShader.Apply(d3dDeviceContext);
+                    d3dDeviceContext.Draw((int)(3 * eye.HiddenAreaMesh.unTriangleCount), 0);
+                }
+
+                if (pixelShaderData.Wireframe) //revert if in wireframe
+                    d3dDeviceContext.Rasterizer.State = SolidRasteizerState;
+
+                if (pixelShaderData.Undistort)
+                {
+                    //render and undistort         
+                    texView = UndistortTextureView;
+                    shaderView = UndistortShaderView;
+                    d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
+                    UndistortShader.Render(d3dDeviceContext, ref eye);
+                }
+
+                //render eye to screen            
+                d3dDeviceContext.Rasterizer.SetViewport(0, 0, WindowSize.Width, WindowSize.Height);
+                d3dDeviceContext.OutputMerger.SetTargets(BackBufferDepthStencilView, BackBufferTextureView);
+                d3dDeviceContext.OutputMerger.SetDepthStencilState(DepthStencilState);
+                d3dDeviceContext.OutputMerger.SetBlendState(null);
+                d3dDeviceContext.PixelShader.SetShaderResource(0, shaderView);
                 d3dDeviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
-                hmaVertexBufferBinding = new VertexBufferBinding(eye.HiddenAreaMeshVertexBuffer, sizeof(float) * 2, 0);
-                d3dDeviceContext.InputAssembler.SetVertexBuffers(0, hmaVertexBufferBinding);
-                hmaShader.Apply(d3dDeviceContext);
-                d3dDeviceContext.Draw((int)(3 * eye.HiddenAreaMesh.unTriangleCount), 0);
+                d3dDeviceContext.InputAssembler.SetVertexBuffers(0, new VertexBufferBinding(eye.BackBufferVertexBuffer, sizeof(float) * 5, 0));
+                d3dDeviceContext.InputAssembler.SetIndexBuffer(BackBufferIndexBuffer, Format.R32_UInt, 0);
+                backbufferShader.Apply(d3dDeviceContext);
+                d3dDeviceContext.DrawIndexed(6, 0, 0);
             }
-
-            if (pixelShaderData.Wireframe) //revert if in wireframe
-                d3dDeviceContext.Rasterizer.State = SolidRasteizerState;
-
-            var texView = eye.TextureView;
-            var shaderView = eye.ShaderView;
-
-            if (pixelShaderData.Undistort)
-            {
-                //render and undistort         
-                texView = UndistortTextureView;
-                shaderView = UndistortShaderView;
-                d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
-                UndistortShader.Render(d3dDeviceContext, ref eye);
-            }
-
-            //render eye to screen            
-            d3dDeviceContext.Rasterizer.SetViewport(0, 0, WindowSize.Width, WindowSize.Height);
-            d3dDeviceContext.OutputMerger.SetTargets(BackBufferDepthStencilView, BackBufferTextureView);
-            d3dDeviceContext.OutputMerger.SetDepthStencilState(DepthStencilState);
-            d3dDeviceContext.OutputMerger.SetBlendState(null);
-            d3dDeviceContext.PixelShader.SetShaderResource(0, shaderView);
-            d3dDeviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
-            d3dDeviceContext.InputAssembler.SetVertexBuffers(0, new VertexBufferBinding(eye.BackBufferVertexBuffer, sizeof(float) * 5, 0));
-            d3dDeviceContext.InputAssembler.SetIndexBuffer(BackBufferIndexBuffer, Format.R32_UInt, 0);
-            backbufferShader.Apply(d3dDeviceContext);
-            d3dDeviceContext.DrawIndexed(6, 0, 0);
-
             //submit to openvr
             var texture = new Texture_t
             {

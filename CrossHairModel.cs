@@ -15,6 +15,7 @@ namespace Undistort
         private static Shader shader;
 
         public static float Radius;
+        private static int DefautVerticesCount;
 
 
         public static void Init(SharpDX.Direct3D11.Device device)
@@ -37,8 +38,9 @@ namespace Undistort
             switch (Program.RenderMode)
             {
                 case 0:
-                case 1:
-                    context.Draw(4, 0);
+                    context.Draw(DefautVerticesCount, 0);
+                //case 1:
+                    
                     break;
                 default:
                     context.Draw(vertices.Length / 6, 0);
@@ -55,7 +57,10 @@ namespace Undistort
             if (Radius < 0.001f) Radius = 0.001f;
                        
             var verticesList = new List<float>();
+            float smallMarkerSize = 0.02f;
+            //float bigMarkerSize = 0.02f;
 
+            //vertical and horiz crosshair
             verticesList.AddRange(new float[] {
                 -1f, 0f, depth, 0, 1, 0,
                 1f, 0f, depth, 0, 1, 0,
@@ -63,9 +68,67 @@ namespace Undistort
                 0f, 1f, depth, 0, 1, 0
             });
 
+            if (Program.pixelShaderData._Undistort == 1)
+            {
+                int sk = 1;                
+
+                //markers
+                var green = new float[] { 0, 1, 0 };
+                for (var y = 0.1f; y < 1.0f / Program.ScreenAspect; y += 0.1f)
+                {
+                    float markerSize = smallMarkerSize * (1.2f * sk++);
+                    //if ((sk++ % 5) == 0)
+                    //    markerSize = bigMarkerSize * 1.5f * bk++;
+                    //vert
+                    verticesList.Add((float)-markerSize);
+                    verticesList.Add((float)y);
+                    verticesList.Add(depth);
+                    verticesList.AddRange(green);
+                    verticesList.Add((float)markerSize);
+                    verticesList.Add((float)y);
+                    verticesList.Add(depth);
+                    verticesList.AddRange(green);
+                    verticesList.Add((float)-markerSize);
+                    verticesList.Add((float)-y);
+                    verticesList.Add(depth);
+                    verticesList.AddRange(green);
+                    verticesList.Add((float)markerSize);
+                    verticesList.Add((float)-y);
+                    verticesList.Add(depth);
+                    verticesList.AddRange(green);
+                }
+                sk  = 1;
+                for (var x = 0.1f; x < 1.0f; x += 0.1f)
+                {
+                    float markerSize = smallMarkerSize * Program.ScreenAspect * (1.2f * sk++); ;
+                    //if ((sk++ % 5) == 0)
+                    //    markerSize = bigMarkerSize * 1.5f * Program.ScreenAspect * bk++;
+
+                    //horz
+                    verticesList.Add((float)x);
+                    verticesList.Add((float)-markerSize / Program.ScreenAspect);
+                    verticesList.Add(depth);
+                    verticesList.AddRange(green);
+                    verticesList.Add((float)x);
+                    verticesList.Add((float)markerSize / Program.ScreenAspect);
+                    verticesList.Add(depth);
+                    verticesList.AddRange(green);
+                    verticesList.Add((float)-x);
+                    verticesList.Add((float)-markerSize / Program.ScreenAspect);
+                    verticesList.Add(depth);
+                    verticesList.AddRange(green);
+                    verticesList.Add((float)-x);
+                    verticesList.Add((float)markerSize / Program.ScreenAspect);
+                    verticesList.Add(depth);
+                    verticesList.AddRange(green);
+                }
+            }
+
+            DefautVerticesCount = verticesList.Count / 6;
+
             var white = new float[] { 1, 1, 1 };
             //grid
-            for (var y = 0.05f; y < 1.0f / Program.ScreenAspect; y += 0.05f)
+            for (var y = 0.1f; y < 1.0f / Program.ScreenAspect; y += 0.1f)
             {
                 //horz
                 verticesList.Add((float)-1);
@@ -85,7 +148,7 @@ namespace Undistort
                 verticesList.Add(depth);
                 verticesList.AddRange(white);
             }
-            for (var x = 0.05f; x < 1.0f; x += 0.05f)
+            for (var x = 0.1f; x < 1.0f; x += 0.1f)
             {
                 //horz
                 verticesList.Add((float)x);
