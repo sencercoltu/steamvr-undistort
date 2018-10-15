@@ -121,6 +121,9 @@ namespace Undistort
 
         private BitmapSource LoadBitmap(ImagingFactory2 factory, string filename)
         {
+            if (!File.Exists(filename))
+                throw new Exception("File " + filename + " doesn't exist.");
+
             var bitmapDecoder = new BitmapDecoder(
                 factory,
                 filename,
@@ -166,6 +169,9 @@ namespace Undistort
 
         private Texture2D LoadFromFile(Device device, ImagingFactory2 factory, string fileName)
         {
+            if (!File.Exists(fileName))
+                throw new Exception("File " + fileName + " doesn't exist.");
+
             Texture2D texture = null;
             switch (Path.GetExtension(fileName).ToLowerInvariant())
             { 

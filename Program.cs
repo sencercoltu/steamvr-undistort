@@ -22,6 +22,11 @@ namespace Undistort
 {
     public static class Program
     {
+        private static void Log(string fmt, params object[] args)
+        {
+            File.AppendAllText("Debug.log", string.Format(fmt + "\n", args));
+        }
+
         private struct VertexShaderData
         {
             public Matrix WorldViewProj;
@@ -285,6 +290,8 @@ namespace Undistort
         [STAThread]
         private static void Main()
         {
+            if (File.Exists("Debug.log")) File.Delete("Debug.log");
+
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
             AppDomain.CurrentDomain.FirstChanceException += CurrentDomain_FirstChanceException;
 
@@ -294,7 +301,10 @@ namespace Undistort
             vrSystem = OpenVR.Init(ref initError);
 
             if (initError != EVRInitError.None)
+            {
+                Log("Error: Initialize OpenVR, {0}", initError.ToString());
                 return;
+            }
 
             OvrPath = OpenVR.RuntimePath();
 
@@ -451,7 +461,7 @@ namespace Undistort
                         SwapEffect = SwapEffect.Discard,
                         Usage = Usage.RenderTargetOutput
                     };
-
+                    
                     SharpDX.Direct3D11.Device.CreateWithSwapChain(adapter, DeviceCreationFlags.BgraSupport /*| DeviceCreationFlags.Debug*/, swapChainDescription, out d3dDevice, out d3dSwapChain);
 
                     factory.MakeWindowAssociation(MainForm.Handle, WindowAssociationFlags.None);
@@ -776,12 +786,14 @@ namespace Undistort
 
         private static void CurrentDomain_FirstChanceException(object sender, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs e)
         {
+            Log("Exception: {0}", e.ToString());
             MessageBox.Show(e.Exception.Message);
             Application.Exit();
         }
 
         private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
+            Log("Exception: {0}", e.ToString());
             MessageBox.Show((e.ExceptionObject as Exception).Message);
             Application.Exit();
         }
@@ -1197,14 +1209,16 @@ namespace Undistort
                 d3dDeviceContext.OutputMerger.SetDepthStencilState(ControllerDepthStencilState);
                 d3dDeviceContext.OutputMerger.SetBlendState(null);
 
+                //render points on empty wall
+                CrossHairModel.RenderPoints(d3dDeviceContext);
+
                 if (pixelShaderData.Undistort || RenderMode != 0)
                 {
-                    //vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView);
-                    //vertexShaderData.WorldViewProj.M43 *= -1;
                     vertexShaderData.WorldViewProj = Matrix.Invert(eye.EyeToHeadView) * projection;
                     vertexShaderData.WorldViewProj.Transpose();
                     d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
                     CrossHairModel.Render(d3dDeviceContext);
+
                 }
 
                 //Render info panels

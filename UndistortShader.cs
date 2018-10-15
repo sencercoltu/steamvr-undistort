@@ -3,6 +3,7 @@ using SharpDX.D3DCompiler;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Valve.VR;
 using static Undistort.Program;
@@ -22,6 +23,8 @@ namespace Undistort
                     new InputElement("POSITION", 0, SharpDX.DXGI.Format.R32G32_Float, 0, 0),
                     new InputElement("TEXCOORD", 0, SharpDX.DXGI.Format.R32G32_Float, 8, 0)
             });
+
+            var verticesList = new List<float>();
 
             vertexBuffer = SharpDX.Direct3D11.Buffer.Create(device, BindFlags.VertexBuffer, new[]
             {

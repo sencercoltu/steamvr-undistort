@@ -29,6 +29,8 @@ namespace Undistort
         //Load model
         public Model Load(String fileName)
         {
+            if (!File.Exists(fileName))
+                throw new Exception("File " + fileName + " doesn't exist.");
             Scene scene = m_importer.ImportFile(fileName, PostProcessPreset.TargetRealTimeMaximumQuality);
 
             //use this directory path to load textures from
