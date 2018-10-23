@@ -209,7 +209,7 @@ namespace Undistort
                 DistortionData.FocalY = PanelSize.Height / 2 * DistortionData.Intrinsics.M22;
                 DistortionData.EyeCenter.X = DistortionData.Intrinsics.M31;
                 DistortionData.EyeCenter.Y = DistortionData.Intrinsics.M32;
-                DistortionData.Aspect = 1.0f / ScreenAspect; // DistortionData.Intrinsics.M11 / DistortionData.Intrinsics.M22;
+                DistortionData.Aspect = DistortionData.Intrinsics.M11 / DistortionData.Intrinsics.M22;
             }
 
             public Matrix GetProjectionFromIntrinsics()
@@ -714,6 +714,7 @@ namespace Undistort
                                         ButtonPressed(role, ref state, (EVRButtonId)vrEvent.data.controller.button);
                                     }
                                     break;
+                                case EVREventType.VREvent_ButtonUntouch:
                                 case EVREventType.VREvent_ButtonUnpress:
                                     {
                                         var role = vrSystem.GetControllerRoleForTrackedDeviceIndex(vrEvent.trackedDeviceIndex);
@@ -818,6 +819,24 @@ namespace Undistort
         public static void AdjustEyeCenters(float xStep, float yStep)
         {
             AdjustCenter(RenderFlags.HasFlag(RenderFlag.Left) ? xStep : 0, RenderFlags.HasFlag(RenderFlag.Left) ? yStep : 0, RenderFlags.HasFlag(RenderFlag.Right) ? xStep : 0, RenderFlags.HasFlag(RenderFlag.Right) ? yStep : 0);
+            if (RenderFlags.HasFlag(RenderFlag.Left))
+            {
+                leftEye.DistortionData.RedCenter.X =
+                leftEye.DistortionData.GreenCenter.X =
+                leftEye.DistortionData.BlueCenter.X = -leftEye.DistortionData.EyeCenter.X;
+                leftEye.DistortionData.RedCenter.Y =
+                leftEye.DistortionData.GreenCenter.Y =
+                leftEye.DistortionData.BlueCenter.Y = -leftEye.DistortionData.EyeCenter.Y;
+            }
+            if (RenderFlags.HasFlag(RenderFlag.Right))
+            {
+                rightEye.DistortionData.RedCenter.X =
+                rightEye.DistortionData.GreenCenter.X =
+                rightEye.DistortionData.BlueCenter.X = -rightEye.DistortionData.EyeCenter.X;
+                rightEye.DistortionData.RedCenter.Y =
+                rightEye.DistortionData.GreenCenter.Y =
+                rightEye.DistortionData.BlueCenter.Y = -rightEye.DistortionData.EyeCenter.Y;
+            }
         }
 
         private static void AdjustCenter(double lx, double ly, double rx, double ry)
@@ -1237,18 +1256,19 @@ namespace Undistort
                         Convert(ref currentPoses[controllerId].mDeviceToAbsoluteTracking, ref controllerMat);
 
                         vertexShaderData.WorldViewProj = controllerMat * Matrix.Invert(eye.EyeToHeadView * headMatrix) * projection;
-
-                        if (AdjustmentPanelModel.Show && controllerRole == ETrackedControllerRole.LeftHand)
+                        if (pixelShaderData.Undistort)
                         {
-                            AdjustmentPanelModel.WVP = vertexShaderData.WorldViewProj;
-                            hasLeft = true;
+                            if (AdjustmentPanelModel.Show && controllerRole == ETrackedControllerRole.LeftHand)
+                            {
+                                AdjustmentPanelModel.WVP = vertexShaderData.WorldViewProj;
+                                hasLeft = true;
+                            }
+                            if (controllerRole == ETrackedControllerRole.RightHand)
+                            {
+                                PointerModel.WVP = vertexShaderData.WorldViewProj;
+                                hasRight = true;
+                            }
                         }
-                        if (controllerRole == ETrackedControllerRole.RightHand)
-                        {
-                            PointerModel.WVP = vertexShaderData.WorldViewProj;
-                            hasRight = true;
-                        }
-
                         vertexShaderData.WorldViewProj.Transpose();
                         d3dDeviceContext.UpdateSubresource(ref vertexShaderData, vertexConstantBuffer);
 
