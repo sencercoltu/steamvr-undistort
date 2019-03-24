@@ -1,8 +1,7 @@
 ## steamvr-undistort
 
-SteamVR lens distortion adjustment utility
-
-(This is unfinished and experimental work.)
+SteamVR lens distortion adjustment utility for custom spherical lenses. 
+(I'm working on another utility for nonspherical lenses like GearVR.)
 
 
 <table border="0"><tr><td>
@@ -17,7 +16,7 @@ SteamVR lens distortion adjustment utility
 [Download link](https://github.com/sencercoltu/steamvr-undistort/releases)
 (Requires .Net4.5 or higher)
 
-Purpose is to find optimal values for the lens coefficients and intrinsics in the JSON file, after replacing the original frensel lenses with GearVR or other lenses.
+Purpose is to find optimal values for the lens coefficients and intrinsics in the JSON file, after replacing the original frensel lenses with ~~GearVR or other lenses~~ other spherical lenses.
 
 The JSON file is read to file LH_Config_In.json via the lighthouse console at startup automatically.
 ~~Adjusted values are saved to LH_Config_Out.json file on exit. (No auto update to device because it's unsafe, you can lose your original configuration. Manually update after backing up original config!)~~ You can write your adjusted config by selecting the appropriate menu item.
