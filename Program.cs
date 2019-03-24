@@ -306,7 +306,8 @@ namespace Undistort
                 return;
             }
 
-            OvrPath = OpenVR.RuntimePath();
+            OvrPath = OpenVR.RuntimePath() + "\\";            
+            OvrPath = OvrPath.Replace("\\\\","\\");
 
             LoadLHSettings(OvrPath);
 
@@ -551,8 +552,8 @@ namespace Undistort
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\928165436\spacecpod\spacecpod.obj";
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\716774474\VertigoRoom\VertigoRoom.obj";
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\686754013\holochamber\holochamber.obj";
-                    //var fileName = OvrPath + @"..\..\workshop\content\250820\717646476\TheCube\TheCube.obj";
-                    var fileName = @"environment\environment.obj";
+                    var fileName = OvrPath + @"..\..\workshop\content\250820\717646476\TheCube\TheCube.obj";
+                    //var fileName = @"environment\environment.obj";
 
 
                     environmentModel = modelLoader.Load(fileName);
