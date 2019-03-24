@@ -1,8 +1,7 @@
 ## steamvr-undistort
 
-SteamVR lens distortion adjustment utility
-
-(This is unfinished and experimental work.)
+SteamVR lens distortion adjustment utility for custom spherical lenses. 
+(I'm working on another utility for nonspherical lenses like GearVR.)
 
 
 <table border="0"><tr><td>
