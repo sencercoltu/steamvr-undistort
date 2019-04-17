@@ -109,18 +109,18 @@
       <Link>openvr_api.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="environment\Floor.png">
+    <None Include="environment\Floor.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="environment\Wall1.png">
+    </None>
+    <None Include="environment\Wall1.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="environment\Wall2.png">
+    </None>
+    <None Include="environment\Wall2.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="environment\Wall3.png">
+    </None>
+    <None Include="environment\Wall3.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
+    </None>
     <Content Include="Undistort.ico" />
     <None Include="Resources\hidden.png" />
     <None Include="Resources\InfoTable.png" />

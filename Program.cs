@@ -552,8 +552,8 @@ namespace Undistort
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\928165436\spacecpod\spacecpod.obj";
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\716774474\VertigoRoom\VertigoRoom.obj";
                     //var fileName = ovrPath + @"..\..\workshop\content\250820\686754013\holochamber\holochamber.obj";
-                    var fileName = OvrPath + @"..\..\workshop\content\250820\717646476\TheCube\TheCube.obj";
-                    //var fileName = @"environment\environment.obj";
+                    //var fileName = OvrPath + @"..\..\workshop\content\250820\717646476\TheCube\TheCube.obj";
+                    var fileName = @"environment\environment.obj";
 
 
                     environmentModel = modelLoader.Load(fileName);
@@ -795,8 +795,9 @@ namespace Undistort
 
         private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            Log("Exception: {0}", e.ToString());
-            MessageBox.Show((e.ExceptionObject as Exception).Message);
+            var ex = (e.ExceptionObject as Exception);
+            Log("Exception: {0} {1} {2}", e.ToString(), ex.StackTrace, ex.InnerException?.ToString());
+            MessageBox.Show(ex.Message);
             Application.Exit();
         }
 
@@ -1437,7 +1438,7 @@ namespace Undistort
 
                 SaveLHSettings(OvrPath);
 
-                var toolPath = OvrPath + @"tools\lighthouse\bin\win32\lighthouse_console.exe";
+                var toolPath = OvrPath + @"tools\lighthouse\bin\win64\lighthouse_console.exe";
                 //var confPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)) + "\\LH_Config_Out.json";
                 var processInfo = new ProcessStartInfo
                 {
@@ -1520,7 +1521,7 @@ namespace Undistort
 
         private static void LoadLHSettings(string ovrPath)
         {
-            var toolPath = ovrPath + @"tools\lighthouse\bin\win32\lighthouse_console.exe";
+            var toolPath = ovrPath + @"tools\lighthouse\bin\win64\lighthouse_console.exe";
             var confPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)) + "\\LH_Config_In.json";
             var processInfo = new ProcessStartInfo
             {
