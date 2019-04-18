@@ -38,7 +38,7 @@ namespace Undistort
         public struct PixelShaderData
         {
             public Vector3 LightPosition;
-            public float Persistence;
+            //public float Persistence;
             public int _Undistort; //bool is 1 byte inside struct, we use int to convert to 4 bytes and use getter setter
             public bool Undistort { get { return _Undistort > 0; } }
             private int _Wireframe;
@@ -71,7 +71,7 @@ namespace Undistort
             public float FocalY;
             public int ActiveEye;
 
-            public Matrix Extrinsics;
+            //public Matrix Extrinsics;
             public Matrix3x3 Intrinsics;
             public Vector3 Reserved2;
 
@@ -1501,22 +1501,22 @@ namespace Undistort
             col[1] = (double)eye.DistortionData.Intrinsics.M23;
             col[2] = (double)eye.DistortionData.Intrinsics.M33;
 
-            row = eye.Json["extrinsics"] as object[];
-            col = row[0] as object[];
-            col[0] = (double)eye.DistortionData.Extrinsics.M11;
-            col[1] = (double)eye.DistortionData.Extrinsics.M21;
-            col[2] = (double)eye.DistortionData.Extrinsics.M31;
-            col[3] = (double)eye.DistortionData.Extrinsics.M41;
-            col = row[1] as object[];
-            col[0] = (double)eye.DistortionData.Extrinsics.M12;
-            col[1] = (double)eye.DistortionData.Extrinsics.M22;
-            col[2] = (double)eye.DistortionData.Extrinsics.M32;
-            col[3] = (double)eye.DistortionData.Extrinsics.M42;
-            col = row[2] as object[];
-            col[0] = (double)eye.DistortionData.Extrinsics.M13;
-            col[1] = (double)eye.DistortionData.Extrinsics.M23;
-            col[2] = (double)eye.DistortionData.Extrinsics.M33;
-            col[3] = (double)eye.DistortionData.Extrinsics.M43;
+            //row = eye.Json["extrinsics"] as object[];
+            //col = row[0] as object[];
+            //col[0] = (double)eye.DistortionData.Extrinsics.M11;
+            //col[1] = (double)eye.DistortionData.Extrinsics.M21;
+            //col[2] = (double)eye.DistortionData.Extrinsics.M31;
+            //col[3] = (double)eye.DistortionData.Extrinsics.M41;
+            //col = row[1] as object[];
+            //col[0] = (double)eye.DistortionData.Extrinsics.M12;
+            //col[1] = (double)eye.DistortionData.Extrinsics.M22;
+            //col[2] = (double)eye.DistortionData.Extrinsics.M32;
+            //col[3] = (double)eye.DistortionData.Extrinsics.M42;
+            //col = row[2] as object[];
+            //col[0] = (double)eye.DistortionData.Extrinsics.M13;
+            //col[1] = (double)eye.DistortionData.Extrinsics.M23;
+            //col[2] = (double)eye.DistortionData.Extrinsics.M33;
+            //col[3] = (double)eye.DistortionData.Extrinsics.M43;
         }
 
         private static void LoadLHSettings(string ovrPath)
@@ -1541,8 +1541,8 @@ namespace Undistort
             var deviceData = lightHouseConfigJson["device"] as IDictionary<string, object>;
             ScreenWidth = (uint)System.Convert.ToDouble(deviceData["eye_target_width_in_pixels"]);
             ScreenHeight = (uint)System.Convert.ToDouble(deviceData["eye_target_height_in_pixels"]);
-            ScreenAspect = (float)System.Convert.ToDouble(deviceData["physical_aspect_x_over_y"]);
-            pixelShaderData.Persistence = (float)System.Convert.ToDouble(deviceData["persistence"]);
+            //ScreenAspect = (float)System.Convert.ToDouble(deviceData["physical_aspect_x_over_y"]);
+            //pixelShaderData.Persistence = (float)System.Convert.ToDouble(deviceData["persistence"]);
 
             leftEye = new EyeData(EVREye.Eye_Left);
             rightEye = new EyeData(EVREye.Eye_Right);
@@ -1595,24 +1595,24 @@ namespace Undistort
             eye.DistortionData.Intrinsics.M23 = (float)System.Convert.ToDouble(col[1]);
             eye.DistortionData.Intrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
 
-            row = eye.Json["extrinsics"] as object[];
-            col = row[0] as object[];
-            eye.DistortionData.Extrinsics = new Matrix(0);
-            eye.DistortionData.Extrinsics.M11 = (float)System.Convert.ToDouble(col[0]);
-            eye.DistortionData.Extrinsics.M21 = (float)System.Convert.ToDouble(col[1]);
-            eye.DistortionData.Extrinsics.M31 = (float)System.Convert.ToDouble(col[2]);
-            eye.DistortionData.Extrinsics.M41 = (float)System.Convert.ToDouble(col[3]);
-            col = row[1] as object[];
-            eye.DistortionData.Extrinsics.M12 = (float)System.Convert.ToDouble(col[0]);
-            eye.DistortionData.Extrinsics.M22 = (float)System.Convert.ToDouble(col[1]);
-            eye.DistortionData.Extrinsics.M32 = (float)System.Convert.ToDouble(col[2]);
-            eye.DistortionData.Extrinsics.M42 = (float)System.Convert.ToDouble(col[3]);
-            col = row[2] as object[];
-            eye.DistortionData.Extrinsics.M13 = (float)System.Convert.ToDouble(col[0]);
-            eye.DistortionData.Extrinsics.M23 = (float)System.Convert.ToDouble(col[1]);
-            eye.DistortionData.Extrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
-            eye.DistortionData.Extrinsics.M43 = (float)System.Convert.ToDouble(col[3]);
-            eye.DistortionData.Extrinsics.M44 = 1;
+            //row = eye.Json["extrinsics"] as object[];
+            //col = row[0] as object[];
+            //eye.DistortionData.Extrinsics = new Matrix(0);
+            //eye.DistortionData.Extrinsics.M11 = (float)System.Convert.ToDouble(col[0]);
+            //eye.DistortionData.Extrinsics.M21 = (float)System.Convert.ToDouble(col[1]);
+            //eye.DistortionData.Extrinsics.M31 = (float)System.Convert.ToDouble(col[2]);
+            //eye.DistortionData.Extrinsics.M41 = (float)System.Convert.ToDouble(col[3]);
+            //col = row[1] as object[];
+            //eye.DistortionData.Extrinsics.M12 = (float)System.Convert.ToDouble(col[0]);
+            //eye.DistortionData.Extrinsics.M22 = (float)System.Convert.ToDouble(col[1]);
+            //eye.DistortionData.Extrinsics.M32 = (float)System.Convert.ToDouble(col[2]);
+            //eye.DistortionData.Extrinsics.M42 = (float)System.Convert.ToDouble(col[3]);
+            //col = row[2] as object[];
+            //eye.DistortionData.Extrinsics.M13 = (float)System.Convert.ToDouble(col[0]);
+            //eye.DistortionData.Extrinsics.M23 = (float)System.Convert.ToDouble(col[1]);
+            //eye.DistortionData.Extrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
+            //eye.DistortionData.Extrinsics.M43 = (float)System.Convert.ToDouble(col[3]);
+            //eye.DistortionData.Extrinsics.M44 = 1;
 
 
 

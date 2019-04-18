@@ -9,12 +9,9 @@ cbuffer vertexConstBuffer : register(b0)
 cbuffer pixelConstBuffer : register(b1)
 {	
 	float3 LightPos;	
-	float Persistence;
-
 	bool Undistort;
 	bool Wireframe;
 	bool Controller;	
-
 	int ActiveColor;
 };
 
@@ -234,7 +231,7 @@ float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 	center = BlueCenter.xy;	
 	center.y *= aspect;
 	float2 buv = UV - center;		
-	float br2 = dot(buv, buv) + Persistence;
+	float br2 = dot(buv, buv);
 	float bk = 1.0 / (BlueCoeffs.w + BlueCoeffs.x * br2 + BlueCoeffs.y * br2 * br2 + BlueCoeffs.z * br2 * br2 * br2);	
 	buv = (buv * bk + center) / bscale;
 	buv.y /= aspect;
