@@ -9,6 +9,7 @@ cbuffer vertexConstBuffer : register(b0)
 cbuffer pixelConstBuffer : register(b1)
 {	
 	float3 LightPos;	
+	float Reserved;
 	bool Undistort;
 	bool Wireframe;
 	bool Controller;	

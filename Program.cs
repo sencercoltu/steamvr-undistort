@@ -38,7 +38,7 @@ namespace Undistort
         public struct PixelShaderData
         {
             public Vector3 LightPosition;
-            //public float Persistence;
+            public float Reserved;
             public int _Undistort; //bool is 1 byte inside struct, we use int to convert to 4 bytes and use getter setter
             public bool Undistort { get { return _Undistort > 0; } }
             private int _Wireframe;
