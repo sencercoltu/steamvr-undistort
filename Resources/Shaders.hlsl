@@ -193,18 +193,8 @@ Undistort_PS_IN Undistort_VS(Undistort_VS_IN input)
 
 float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 {	
-	float ir = 1.0 / 0.9959283065186691; // 1.50917f / 1.51534f;
-	float ib = 1.0 / 1.001029471933691; //1.51690f / 1.51534f;
-
-	//float scale = 1.0 + GrowToUndistort;	
-	float rscale = ir + GrowToUndistort;
-	float gscale = 1.0f + GrowToUndistort;
-	float bscale = ib + GrowToUndistort;
-
-
-
+	float scale = 1.0f + GrowToUndistort;
 	float aspect = Aspect;
-
 	float2 UV = (input.uv * 2) - 1;	//convert [0;1] to [-1;1]	
 	UV.y *= aspect;
 	
@@ -213,18 +203,17 @@ float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 	float2 ruv = UV - center;
 	float rr2 = dot(ruv, ruv);		
 	float rk = 1.0 / (RedCoeffs.w + RedCoeffs.x * rr2 + RedCoeffs.y * rr2 * rr2 + RedCoeffs.z * rr2 * rr2 * rr2);	
-	ruv = (ruv * rk + center) / rscale;
+	ruv = (ruv * rk + center) / scale;
 	ruv.y /= aspect;
 	ruv = (ruv + 1) / 2; //convert [-1;1] back to [0;1]
 	float R = diffuseTexture.Sample(diffuseSampler, ruv).r;
-		
 	
 	center = GreenCenter.xy;
 	center.y *= aspect;
 	float2 guv = UV - center;	
 	float gr2 = dot(guv, guv);
 	float gk = 1.0 / (GreenCoeffs.w + GreenCoeffs.x * gr2 + GreenCoeffs.y * gr2 * gr2 + GreenCoeffs.z * gr2 * gr2 * gr2);
-	guv = (guv * gk + center) / gscale;
+	guv = (guv * gk + center) / scale;
 	guv.y /= aspect;
 	guv = (guv + 1) / 2;
 	float G = diffuseTexture.Sample(diffuseSampler, guv).g;
@@ -234,7 +223,7 @@ float4 Undistort_PS(Undistort_PS_IN input) : SV_Target
 	float2 buv = UV - center;		
 	float br2 = dot(buv, buv);
 	float bk = 1.0 / (BlueCoeffs.w + BlueCoeffs.x * br2 + BlueCoeffs.y * br2 * br2 + BlueCoeffs.z * br2 * br2 * br2);	
-	buv = (buv * bk + center) / bscale;
+	buv = (buv * bk + center) / scale;
 	buv.y /= aspect;
 	buv = (buv + 1) / 2;
 	float B = diffuseTexture.Sample(diffuseSampler, buv).b;
