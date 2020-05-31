@@ -309,7 +309,8 @@ namespace Undistort
             OvrPath = OpenVR.RuntimePath() + "\\";            
             OvrPath = OvrPath.Replace("\\\\","\\");
 
-            LoadLHSettings(OvrPath);
+            if (!LoadLHSettings(OvrPath))
+                return;
 
             vrCompositor = OpenVR.Compositor;
 
@@ -1439,20 +1440,28 @@ namespace Undistort
                 SaveLHSettings(OvrPath);
 
                 var toolPath = OvrPath + @"tools\lighthouse\bin\win64\lighthouse_console.exe";
-                //var confPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)) + "\\LH_Config_Out.json";
-                var processInfo = new ProcessStartInfo
+
+                if (File.Exists(toolPath))
                 {
-                    Arguments = "uploadconfig LH_Config_Out.json",
-                    //CreateNoWindow = true,
-                    FileName = toolPath,
-                    //WindowStyle = ProcessWindowStyle.Hidden
+                    //var confPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)) + "\\LH_Config_Out.json";
+                    var processInfo = new ProcessStartInfo
+                    {
+                        Arguments = "uploadconfig LH_Config_Out.json",
+                        //CreateNoWindow = true,
+                        FileName = toolPath,
+                        //WindowStyle = ProcessWindowStyle.Hidden
 
-                };
-                //MessageBox.Show("Running process " + toolPath + " " + processInfo.Arguments);
-                var process = Process.Start(processInfo);
-                process.WaitForExit();
+                    };
+                    //MessageBox.Show("Running process " + toolPath + " " + processInfo.Arguments);
+                    var process = Process.Start(processInfo);
+                    process.WaitForExit();
 
-                MessageBox.Show("Now you have to restart SteamVR.");
+                    MessageBox.Show("Now you have to restart SteamVR.");
+                }
+                else
+                {
+                    MessageBox.Show("File LH_Config_Out.json must be manually upladed to HMD.");
+                }
                 MainForm.Close();
             }
         }
@@ -1519,46 +1528,67 @@ namespace Undistort
             //col[3] = (double)eye.DistortionData.Extrinsics.M43;
         }
 
-        private static void LoadLHSettings(string ovrPath)
+        private static bool LoadLHSettings(string ovrPath)
         {
-            var toolPath = ovrPath + @"tools\lighthouse\bin\win64\lighthouse_console.exe";
-            var confPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)) + "\\LH_Config_In.json";
-            var processInfo = new ProcessStartInfo
+            try
             {
-                Arguments = "downloadconfig LH_Config_In.json",
-                CreateNoWindow = true,
-                FileName = toolPath,
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
-            //MessageBox.Show("Running process " + toolPath + " " + processInfo.Arguments);
-            var process = Process.Start(processInfo);
-            process.WaitForExit();
 
-            var jsonData = File.ReadAllText(confPath);
-            File.WriteAllText(confPath, jsonData.Prettify());
-            lightHouseConfigJson = FastJson.Deserialize<IDictionary<string, object>>(jsonData);
+                var confPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)) + "\\LH_Config_In.json";
+                var toolPath = ovrPath + @"tools\lighthouse\bin\win64\lighthouse_console.exe";
+                if (File.Exists(toolPath))
+                {
 
-            var deviceData = lightHouseConfigJson["device"] as IDictionary<string, object>;
-            ScreenWidth = (uint)System.Convert.ToDouble(deviceData["eye_target_width_in_pixels"]);
-            ScreenHeight = (uint)System.Convert.ToDouble(deviceData["eye_target_height_in_pixels"]);
-            //ScreenAspect = (float)System.Convert.ToDouble(deviceData["physical_aspect_x_over_y"]);
-            //pixelShaderData.Persistence = (float)System.Convert.ToDouble(deviceData["persistence"]);
-
-            leftEye = new EyeData(EVREye.Eye_Left);
-            rightEye = new EyeData(EVREye.Eye_Right);
-
-            leftEye.PanelSize.Width = rightEye.PanelSize.Width = ScreenWidth;
-            leftEye.PanelSize.Height = rightEye.PanelSize.Height = ScreenHeight;
-
-            var transforms = lightHouseConfigJson["tracking_to_eye_transform"] as object[];
-            leftEye.Json = (transforms[0]) as IDictionary<string, object>;
-            rightEye.Json = (transforms[1]) as IDictionary<string, object>;
+                    var processInfo = new ProcessStartInfo
+                    {
+                        Arguments = "downloadconfig LH_Config_In.json",
+                        CreateNoWindow = true,
+                        FileName = toolPath,
+                        WindowStyle = ProcessWindowStyle.Hidden
+                    };
+                    //MessageBox.Show("Running process " + toolPath + " " + processInfo.Arguments);
+                    var process = Process.Start(processInfo);
+                    process.WaitForExit();
+                }
 
 
-            LoadEyeSettings(leftEye);
-            LoadEyeSettings(rightEye);
+                if (!File.Exists(confPath))
+                {
+                    MessageBox.Show("LH_Config_In.json not found in application folder.\r\nPlease extract it with your custom tool(?) and copy it in the appications folder with name LH_Config_In.json");
+                    Application.Exit();
+                    return false;
+                }
+
+                var jsonData = File.ReadAllText(confPath);
+                File.WriteAllText(confPath, jsonData.Prettify());
+                lightHouseConfigJson = FastJson.Deserialize<IDictionary<string, object>>(jsonData);
+
+                var deviceData = lightHouseConfigJson["device"] as IDictionary<string, object>;
+                ScreenWidth = (uint)System.Convert.ToDouble(deviceData["eye_target_width_in_pixels"]);
+                ScreenHeight = (uint)System.Convert.ToDouble(deviceData["eye_target_height_in_pixels"]);
+                //ScreenAspect = (float)System.Convert.ToDouble(deviceData["physical_aspect_x_over_y"]);
+                //pixelShaderData.Persistence = (float)System.Convert.ToDouble(deviceData["persistence"]);
+
+                leftEye = new EyeData(EVREye.Eye_Left);
+                rightEye = new EyeData(EVREye.Eye_Right);
+
+                leftEye.PanelSize.Width = rightEye.PanelSize.Width = ScreenWidth;
+                leftEye.PanelSize.Height = rightEye.PanelSize.Height = ScreenHeight;
+
+                var transforms = lightHouseConfigJson["tracking_to_eye_transform"] as object[];
+                leftEye.Json = (transforms[0]) as IDictionary<string, object>;
+                rightEye.Json = (transforms[1]) as IDictionary<string, object>;
 
 
+                LoadEyeSettings(leftEye);
+                LoadEyeSettings(rightEye);
+
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Exception");
+                return false;
+            }
+            return true;
         }
 
         private static void LoadEyeSettings(EyeData eye)
@@ -1573,24 +1603,27 @@ namespace Undistort
             eye.DistortionData.RedCenter.X = (float)System.Convert.ToDouble((eye.Json["distortion_red"] as Dictionary<string, object>)["center_x"]);
             eye.DistortionData.RedCenter.Y = (float)System.Convert.ToDouble((eye.Json["distortion_red"] as Dictionary<string, object>)["center_y"]);
 
-            var g = ((eye.Json["distortion"] as Dictionary<string, object>)["coeffs"] as object[]).Select(a => (float)System.Convert.ToDouble(a)).ToArray();
+            var arr = (eye.Json["distortion"] as Dictionary<string, object>)["coeffs"] as object[] ?? new object[] { 0.0, 0.0, 0.0 };
+            var g = arr.Select(a => (float)System.Convert.ToDouble(a)).ToArray();
             eye.DistortionData.GreenCoeffs.X = g[0]; eye.DistortionData.GreenCoeffs.Y = g[1]; eye.DistortionData.GreenCoeffs.Z = g[2];
-            var b = ((eye.Json["distortion_blue"] as Dictionary<string, object>)["coeffs"] as object[]).Select(a => (float)System.Convert.ToDouble(a)).ToArray();
+            arr = (eye.Json["distortion_blue"] as Dictionary<string, object>)["coeffs"] as object[] ?? new object[] { 0.0, 0.0, 0.0 };
+            var b = arr.Select(a => (float)System.Convert.ToDouble(a)).ToArray();
             eye.DistortionData.BlueCoeffs.X = b[0]; eye.DistortionData.BlueCoeffs.Y = b[1]; eye.DistortionData.BlueCoeffs.Z = b[2];
-            var r = ((eye.Json["distortion_red"] as Dictionary<string, object>)["coeffs"] as object[]).Select(a => (float)System.Convert.ToDouble(a)).ToArray();
+            arr = (eye.Json["distortion_red"] as Dictionary<string, object>)["coeffs"] as object[] ?? new object[] { 0.0, 0.0, 0.0 };
+            var r = arr.Select(a => (float)System.Convert.ToDouble(a)).ToArray();
             eye.DistortionData.RedCoeffs.X = r[0]; eye.DistortionData.RedCoeffs.Y = r[1]; eye.DistortionData.RedCoeffs.Z = r[2];
 
-            var row = eye.Json["intrinsics"] as object[];
-            var col = row[0] as object[];
+            var row = eye.Json["intrinsics"] as object[] ?? new object[] { new object[] { 0.0, 0.0, 0.0 }, new object[] { 0.0, 0.0, 0.0 }, new object[] { 0.0, 0.0, 0.0 } };
+            var col = row[0] as object[] ?? new object[] { 0.0, 0.0, 0.0 };
             eye.DistortionData.Intrinsics = Matrix3x3.Zero;
             eye.DistortionData.Intrinsics.M11 = (float)System.Convert.ToDouble(col[0]);
             eye.DistortionData.Intrinsics.M21 = (float)System.Convert.ToDouble(col[1]);
             eye.DistortionData.Intrinsics.M31 = (float)System.Convert.ToDouble(col[2]);
-            col = row[1] as object[];
+            col = row[1] as object[] ?? new object[] { 0.0, 0.0, 0.0 };
             eye.DistortionData.Intrinsics.M12 = (float)System.Convert.ToDouble(col[0]);
             eye.DistortionData.Intrinsics.M22 = (float)System.Convert.ToDouble(col[1]);
             eye.DistortionData.Intrinsics.M32 = (float)System.Convert.ToDouble(col[2]);
-            col = row[2] as object[];
+            col = row[2] as object[] ?? new object[] { 0.0, 0.0, 0.0 };
             eye.DistortionData.Intrinsics.M13 = (float)System.Convert.ToDouble(col[0]);
             eye.DistortionData.Intrinsics.M23 = (float)System.Convert.ToDouble(col[1]);
             eye.DistortionData.Intrinsics.M33 = (float)System.Convert.ToDouble(col[2]);
