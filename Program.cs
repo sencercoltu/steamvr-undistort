@@ -81,6 +81,7 @@ namespace Undistort
         //public static bool Undistort;
         //public static bool Wireframe;
         public static bool RenderHiddenMesh = true;
+        private static bool RenderHiddenMeshSupported = true;
 
         private static CVRSystem vrSystem;
         private static CVRCompositor vrCompositor;
@@ -349,6 +350,10 @@ namespace Undistort
 
             leftEye.HiddenAreaMesh = vrSystem.GetHiddenAreaMesh(EVREye.Eye_Left, EHiddenAreaMeshType.k_eHiddenAreaMesh_Standard);
             rightEye.HiddenAreaMesh = vrSystem.GetHiddenAreaMesh(EVREye.Eye_Right, EHiddenAreaMeshType.k_eHiddenAreaMesh_Standard);
+            if (leftEye.HiddenAreaMesh.unTriangleCount == 0 || rightEye.HiddenAreaMesh.unTriangleCount == 0)
+            {
+                RenderHiddenMeshSupported = false;
+            }
 
             int adapterIndex = 0;
 
@@ -626,33 +631,35 @@ namespace Undistort
                     PointerModel.Init(d3dDevice);
                     AdjustCenter(0, 0, 0, 0);
 
-                    hmaShader = new Shader(d3dDevice, "HiddenMesh_VS", "HiddenMesh_PS", new InputElement[]
+                    if (RenderHiddenMeshSupported)
                     {
-                        new InputElement("POSITION", 0, Format.R32G32_Float, 0, 0)
-                    });
+                        hmaShader = new Shader(d3dDevice, "HiddenMesh_VS", "HiddenMesh_PS", new InputElement[]
+                        {
+                            new InputElement("POSITION", 0, Format.R32G32_Float, 0, 0)
+                        });
 
-                    IntPtrToStructArray<HmdVector2_t>(leftEye.HiddenAreaMesh.pVertexData, (int)(leftEye.HiddenAreaMesh.unTriangleCount * 3), out var leftHAMVertices);
-                    IntPtrToStructArray<HmdVector2_t>(rightEye.HiddenAreaMesh.pVertexData, (int)(rightEye.HiddenAreaMesh.unTriangleCount * 3), out var rightHAMVertices);
+                        IntPtrToStructArray<HmdVector2_t>(leftEye.HiddenAreaMesh.pVertexData, (int)(leftEye.HiddenAreaMesh.unTriangleCount * 3), out var leftHAMVertices);
+                        IntPtrToStructArray<HmdVector2_t>(rightEye.HiddenAreaMesh.pVertexData, (int)(rightEye.HiddenAreaMesh.unTriangleCount * 3), out var rightHAMVertices);
 
-                    //convert 0/1 range to -1/1
-                    for (var i = 0; i < leftHAMVertices.Length; i++)
-                    {
-                        var vert = leftHAMVertices[i];
-                        vert.v0 -= 0.5f; vert.v0 *= 2;
-                        vert.v1 -= 0.5f; vert.v1 *= 2;
-                        leftHAMVertices[i] = vert;
+                        //convert 0/1 range to -1/1
+                        for (var i = 0; i < leftHAMVertices.Length; i++)
+                        {
+                            var vert = leftHAMVertices[i];
+                            vert.v0 -= 0.5f; vert.v0 *= 2;
+                            vert.v1 -= 0.5f; vert.v1 *= 2;
+                            leftHAMVertices[i] = vert;
+                        }
+                        for (var i = 0; i < rightHAMVertices.Length; i++)
+                        {
+                            var vert = rightHAMVertices[i];
+                            vert.v0 -= 0.5f; vert.v0 *= 2;
+                            vert.v1 -= 0.5f; vert.v1 *= 2;
+                            rightHAMVertices[i] = vert;
+                        }
+                    
+                        leftEye.HiddenAreaMeshVertexBuffer = SharpDX.Direct3D11.Buffer.Create(d3dDevice, BindFlags.VertexBuffer, leftHAMVertices);
+                        rightEye.HiddenAreaMeshVertexBuffer = SharpDX.Direct3D11.Buffer.Create(d3dDevice, BindFlags.VertexBuffer, rightHAMVertices);
                     }
-                    for (var i = 0; i < rightHAMVertices.Length; i++)
-                    {
-                        var vert = rightHAMVertices[i];
-                        vert.v0 -= 0.5f; vert.v0 *= 2;
-                        vert.v1 -= 0.5f; vert.v1 *= 2;
-                        rightHAMVertices[i] = vert;
-                    }
-
-
-                    leftEye.HiddenAreaMeshVertexBuffer = SharpDX.Direct3D11.Buffer.Create(d3dDevice, BindFlags.VertexBuffer, leftHAMVertices);
-                    rightEye.HiddenAreaMeshVertexBuffer = SharpDX.Direct3D11.Buffer.Create(d3dDevice, BindFlags.VertexBuffer, rightHAMVertices);
 
                     //SetProjectionZoomLevel();
 
@@ -1296,7 +1303,7 @@ namespace Undistort
                 }
 
 
-                if (RenderHiddenMesh /*&& IsEyeActive(eye.Eye)*/)
+                if (RenderHiddenMesh && RenderHiddenMeshSupported /*&& IsEyeActive(eye.Eye)*/)
                 {
                     d3dDeviceContext.Rasterizer.State = pixelShaderData.Wireframe ? ncWireFrameRasterizerState : ncRasterizerState;
                     //render hidden mesh area just for control distortion area
